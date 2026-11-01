@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Conn, HistoryEntry, QueryOutput, QueryResult, SavedQuery, TableInfo } from "./types";
+import type { Conn, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Settings, TableInfo } from "./types";
 
 /** Um wrapper tipado por comando Tauri definido em src-tauri/src/lib.rs. */
 export const api = {
@@ -22,6 +22,9 @@ export const api = {
   clearHistory: () => invoke<void>("clear_history"),
   listSavedQueries: () => invoke<SavedQuery[]>("list_saved_queries"),
   saveQuery: (query: SavedQuery) => invoke<void>("save_query", { query }),
+  getSettings: () => invoke<Settings>("get_settings"),
+  setSettings: (settings: Settings) => invoke<void>("set_settings", { settings }),
+
   deleteSavedQuery: (id: number) => invoke<void>("delete_saved_query", { id }),
 };
 

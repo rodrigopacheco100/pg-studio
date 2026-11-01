@@ -62,3 +62,9 @@ export interface RunInfo {
   affected?: number;
   message?: string;
 }
+
+/** Espelha `Settings` em src-tauri/src/settings.rs (camelCase). */
+export interface Settings {
+  sidebarWidth: number;
+  editorHeight: number;
+}
