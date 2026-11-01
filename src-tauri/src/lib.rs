@@ -1,8 +1,10 @@
 mod local;
 mod pg;
+mod settings;
 
 use local::{ConnectionConfig, HistoryEntry, SavedQuery};
 use pg::{QueryResult, TableInfo};
+use settings::{Settings, SettingsStore};
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
@@ -21,6 +23,7 @@ struct Active {
 struct AppState {
     app: AppHandle,
     store: Mutex<rusqlite::Connection>,
+    settings: Mutex<SettingsStore>,
     active: AsyncMutex<Option<Active>>,
     /// Conexão da contagem em andamento; separada da principal para nunca atrasar as queries do usuário.
     counting: AsyncMutex<Option<Arc<pg::Session>>>,
@@ -152,6 +155,16 @@ async fn table_count(state: State<'_, AppState>, schema: String, table: String) 
 }
 
 #[tauri::command]
+fn get_settings(state: State<AppState>) -> CmdResult<Settings> {
+    Ok(state.settings.lock().map_err(|e| e.to_string())?.get())
+}
+
+#[tauri::command]
+fn set_settings(state: State<AppState>, settings: Settings) -> CmdResult<()> {
+    state.settings.lock().map_err(|e| e.to_string())?.set(settings)
+}
+
+#[tauri::command]
 fn list_history(state: State<AppState>) -> CmdResult<Vec<HistoryEntry>> {
     state.store(local::list_history)
 }
@@ -183,7 +196,7 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let store = local::open(&dir.join("pg-studio.sqlite"))?;
-            app.manage(AppState { app: app.handle().clone(), store: Mutex::new(store), active: AsyncMutex::new(None), counting: AsyncMutex::new(None) });
+            app.manage(AppState { app: app.handle().clone(), store: Mutex::new(store), settings: Mutex::new(SettingsStore::load(dir.join("settings.json"))), active: AsyncMutex::new(None), counting: AsyncMutex::new(None) });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -202,6 +215,8 @@ pub fn run() {
             list_saved_queries,
             save_query,
             delete_saved_query,
+            get_settings,
+            set_settings,
         ])
         .run(tauri::generate_context!())
         .expect("erro ao iniciar o PG Studio");
