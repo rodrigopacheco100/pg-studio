@@ -21,8 +21,7 @@ export function QueryView({ sql, tables, onSqlChange, results }: Props) {
   const editor = useRef<SqlEditorHandle>(null);
   const { settings, update } = useSettings();
 
-  function run() {
-    const text = editor.current?.getRunText();
+  function run(text: string) {
     if (text) void results.runQuery(text);
   }
 
@@ -37,7 +36,7 @@ export function QueryView({ sql, tables, onSqlChange, results }: Props) {
       <div className="relative flex max-h-[80%] min-h-32 shrink-0 flex-col border-b" style={{ height: settings.editorHeight }}>
         <ResizeHandle axis="y" size={settings.editorHeight} min={128} onChange={(editorHeight) => update({ editorHeight })} />
         <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
-          <Button size="sm" onClick={run}><Play /> Executar</Button>
+          <Button size="sm" onClick={() => run(editor.current?.getRunText() ?? "")}><Play /> Executar</Button>
           <Button size="sm" variant="outline" onClick={save}><Save /> Salvar query</Button>
           <span className="ml-auto text-xs text-muted-foreground">Ctrl+Enter executa · Ctrl+Espaço autocompleta</span>
         </div>
