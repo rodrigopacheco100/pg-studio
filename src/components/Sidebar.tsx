@@ -2,6 +2,8 @@ import { Database, Eye, Pencil, Plus, RefreshCw, Table2, Trash2 } from "lucide-r
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { useSettings } from "../hooks/useSettings";
+import { ResizeHandle } from "./ResizeHandle";
 import type { Conn, TableInfo, TableRef } from "../types";
 
 interface Props {
@@ -26,9 +28,11 @@ function SectionHeader({ title, children }: { title: string; children: React.Rea
 }
 
 export function Sidebar(p: Props) {
+  const { settings, update } = useSettings();
   let lastSchema = "";
   return (
-    <aside className="flex min-h-0 flex-col border-r bg-sidebar text-sidebar-foreground">
+    <aside className="relative flex min-h-0 flex-col border-r bg-sidebar text-sidebar-foreground">
+      <ResizeHandle axis="x" size={settings.sidebarWidth} min={180} max={560} onChange={(sidebarWidth) => update({ sidebarWidth })} />
       <SectionHeader title="Conexões">
         <Button variant="ghost" size="icon-xs" title="Nova conexão" onClick={p.onNew}>
           <Plus />

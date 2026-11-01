@@ -7,6 +7,7 @@ import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { errText } from "./api";
 import { useConnections } from "./hooks/useConnections";
+import { useSettings } from "./hooks/useSettings";
 import { useResults } from "./hooks/useResults";
 import type { Conn } from "./types";
 import { HistoryView } from "./views/HistoryView";
@@ -24,6 +25,7 @@ export function App() {
   const [dialog, setDialog] = useState<Conn | null | undefined>(undefined);
 
   const [restored, setRestored] = useState(false);
+  const { settings, update } = useSettings();
 
   // O backend reabre a conexão sozinho quando ela cai; avisa porque a sessão do banco recomeça do zero.
   useEffect(() => {
@@ -75,7 +77,7 @@ export function App() {
 
   return (
     <TooltipProvider>
-      <div className="grid h-screen grid-cols-[16rem_1fr] grid-rows-[minmax(0,1fr)_auto]">
+      <div className="grid h-screen grid-rows-[minmax(0,1fr)_auto]" style={{ gridTemplateColumns: `${settings.sidebarWidth}px 1fr` }}>
         <Sidebar
           connections={ws.connections}
           activeId={ws.activeId}
