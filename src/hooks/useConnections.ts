@@ -1,0 +1,44 @@
+import { useCallback, useEffect, useState } from "react";
+import { api } from "../api";
+import type { Conn, TableInfo } from "../types";
+
+/** Conexões salvas, conexão ativa e tabelas do banco conectado. */
+export function useConnections() {
+  const [connections, setConnections] = useState<Conn[]>([]);
+  const [activeId, setActiveId] = useState<number | null>(null);
+  const [tables, setTables] = useState<TableInfo[]>([]);
+  const [connecting, setConnecting] = useState(false);
+
+  const reload = useCallback(async () => setConnections(await api.listConnections()), []);
+  useEffect(() => void reload(), [reload]);
+
+  const disconnect = useCallback(async () => {
+    await api.disconnect();
+    setActiveId(null);
+    setTables([]);
+  }, []);
+
+  /** Lança erro se a conexão falhar. */
+  const connect = useCallback(async (id: number) => {
+    setConnecting(true);
+    try {
+      setTables(await api.connect(id));
+      setActiveId(id);
+    } finally {
+      setConnecting(false);
+    }
+  }, []);
+
+  const remove = useCallback(
+    async (id: number) => {
+      if (id === activeId) await disconnect();
+      await api.deleteConnection(id);
+      await reload();
+    },
+    [activeId, disconnect, reload],
+  );
+
+  const refreshTables = useCallback(async () => setTables(await api.refreshTables()), []);
+
+  return { connections, activeId, tables, connecting, reload, connect, disconnect, remove, refreshTables };
+}

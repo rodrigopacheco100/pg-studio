@@ -1,0 +1,123 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Tipo de versão
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+concurrency: release
+
+jobs:
+  # Sobe a versão, commita em main, cria a tag e o release com os commits
+  # desde a release anterior.
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Calculate and write new version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          node <<'JS'
+          const fs = require("fs");
+          const [maj, min, pat] = require("./package.json").version.split(".").map(Number);
+          const v = {
+            major: [maj + 1, 0, 0],
+            minor: [maj, min + 1, 0],
+            patch: [maj, min, pat + 1],
+          }[process.env.BUMP].join(".");
+
+          const edit = (file, fn) => fs.writeFileSync(file, fn(fs.readFileSync(file, "utf8")));
+          edit("package.json", (s) => s.replace(/"version": "[^"]+"/, `"version": "${v}"`));
+          edit("src-tauri/tauri.conf.json", (s) => s.replace(/"version": "[^"]+"/, `"version": "${v}"`));
+          edit("src-tauri/Cargo.toml", (s) => s.replace(/^version = "[^"]+"/m, `version = "${v}"`));
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${v}\ntag=v${v}\n`);
+          JS
+          cargo update --workspace --manifest-path src-tauri/Cargo.toml
+
+      - name: Generate release notes
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
+          range=${last:+$last..HEAD}
+          {
+            echo "## O que mudou"
+            echo
+            git log $range --no-merges --pretty='- %s (%h)'
+            [ -n "$last" ] && echo && echo "**Comparação completa:** https://github.com/${{ github.repository }}/compare/$last...$TAG"
+          } > "$RUNNER_TEMP/notes.md"
+          cat "$RUNNER_TEMP/notes.md"
+
+      - name: Commit, tag and create release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "chore(release): $TAG"
+          git tag "$TAG"
+          git push origin HEAD:main "$TAG"
+          gh release create "$TAG" --title "PG Studio $TAG" --notes-file "$RUNNER_TEMP/notes.md"
+
+  build:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            args: ""
+          - os: macos-latest # Apple Silicon
+            args: "--target aarch64-apple-darwin"
+          - os: macos-latest # Intel
+            args: "--target x86_64-apple-darwin"
+          - os: windows-latest
+            args: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.tag }}
+
+      - name: Install Linux dependencies
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ contains(matrix.args, 'apple-darwin') && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Anexa os instaladores ao release criado no job anterior.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ needs.prepare.outputs.tag }}
+          args: ${{ matrix.args }}
