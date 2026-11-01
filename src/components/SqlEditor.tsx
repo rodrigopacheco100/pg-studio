@@ -6,6 +6,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, keymap } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useImperativeHandle, useRef } from "react";
+import { runGutter } from "./runGutter";
 import { createSqlCompletion } from "../lib/sqlComplete";
 import type { TableInfo } from "../types";
 
@@ -19,7 +20,8 @@ interface Props {
   value: string;
   tables: TableInfo[];
   onChange: (value: string) => void;
-  onRun: () => void;
+  /** Executa `sql`: o texto da seleção/documento (Ctrl+Enter) ou uma instrução (botão ▶). */
+  onRun: (sql: string) => void;
 }
 
 /** Usa as variáveis de cor do shadcn; o `oneDark` fornece o realce de sintaxe. */
@@ -41,6 +43,12 @@ const theme = EditorView.theme({
   },
 });
 
+function getRunText(v: EditorView) {
+  const s = v.state;
+  const { from, to } = s.selection.main;
+  return (from === to ? s.doc.toString() : s.sliceDoc(from, to)).trim();
+}
+
 export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
@@ -48,13 +56,7 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
   const latest = useRef({ onChange, onRun, tables });
   latest.current = { onChange, onRun, tables };
 
-  useImperativeHandle(ref, () => ({
-    getRunText: () => {
-      const s = view.current!.state;
-      const { from, to } = s.selection.main;
-      return (from === to ? s.doc.toString() : s.sliceDoc(from, to)).trim();
-    },
-  }));
+  useImperativeHandle(ref, () => ({ getRunText: () => getRunText(view.current!) }));
 
   useEffect(() => {
     const v = new EditorView({
@@ -63,10 +65,11 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
       extensions: [
         Prec.highest(
           keymap.of([
-            { key: "Mod-Enter", run: () => (latest.current.onRun(), true) },
+            { key: "Mod-Enter", run: (target) => (latest.current.onRun(getRunText(target)), true) },
             indentWithTab,
           ]),
         ),
+        runGutter((sql) => latest.current.onRun(sql)),
         basicSetup,
         sql({ dialect: PostgreSQL }),
         oneDark,
