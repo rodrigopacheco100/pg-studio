@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { api, errText, pickKeyFile } from "../api";
+import { OptionSelect } from "./OptionSelect";
 import { PasswordInput } from "./PasswordInput";
 import { ENVIRONMENTS } from "../lib/environments";
 import { useVault } from "../hooks/useVault";
@@ -183,15 +184,12 @@ export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
             {field("database", "Database", {})}
               <div className="grid gap-1.5">
                 <Label htmlFor="conn-environment">Environment</Label>
-                <select
+                <OptionSelect
                   id="conn-environment"
                   value={draft.environment}
-                  onChange={(e) => set("environment", e.target.value as Draft["environment"])}
-                  className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30"
-                >
-                  <option value="">Not specified</option>
-                  {ENVIRONMENTS.map((env) => <option key={env.id} value={env.id}>{env.label}</option>)}
-                </select>
+                  onChange={(environment) => set("environment", environment)}
+                  options={[{ value: "", label: "Not specified" }, ...ENVIRONMENTS.map((env) => ({ value: env.id, label: env.label }))]}
+                />
               </div>
             </TabsContent>
             <TabsContent value="security" className="grid min-h-72 content-start gap-3 pt-2">
@@ -234,16 +232,16 @@ export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
                   {field("ssh_user", "SSH user", {})}
                   <div className="grid gap-1.5">
                     <Label htmlFor="conn-ssh_auth">Authentication</Label>
-                    <select
+                    <OptionSelect
                       id="conn-ssh_auth"
                       value={draft.ssh_auth}
-                      onChange={(e) => set("ssh_auth", e.target.value as Draft["ssh_auth"])}
-                      className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30"
-                    >
-                      <option value="key">Private key</option>
-                      <option value="password">Password</option>
-                      <option value="agent">SSH agent</option>
-                    </select>
+                      onChange={(auth) => set("ssh_auth", auth)}
+                      options={[
+                        { value: "key", label: "Private key" },
+                        { value: "password", label: "Password" },
+                        { value: "agent", label: "SSH agent" },
+                      ]}
+                    />
                   </div>
                 </div>
                 {draft.ssh_auth === "key" && (
