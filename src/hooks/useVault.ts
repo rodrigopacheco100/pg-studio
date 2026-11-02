@@ -13,26 +13,33 @@ export function useVault() {
     try {
       const status = await api.vaultStatus();
       if (status.keychainProblem === null || status.vault === "unlocked") return true;
+      /** Runs `action`; its failure becomes the message shown inside the prompt, which then stays open. */
+      const attempt = async (action: () => Promise<void>) => {
+        try {
+          await action();
+          return null;
+        } catch (e) {
+          return errText(e);
+        }
+      };
       if (status.vault === "none") {
         const master = await dialogs.prompt(
           "There is no system keychain here, so saved passwords are encrypted with a master password. It cannot be recovered if forgotten.",
           "Create master password",
-          { secret: true },
+          { secret: true, validate: async (v) => (v ? null : "The master password cannot be empty") },
         );
-        if (!master) return false;
-        const again = await dialogs.prompt("Repeat the master password", "Create master password", { secret: true });
-        if (again === null) return false;
-        if (again !== master) {
-          await dialogs.alert("The passwords do not match.");
-          return false;
-        }
-        await api.vaultOpen(master, true);
-      } else {
-        const master = await dialogs.prompt("Master password for the saved passwords", "Unlock", { secret: true });
         if (master === null) return false;
-        await api.vaultOpen(master, false);
+        const created = await dialogs.prompt("Repeat the master password", "Create master password", {
+          secret: true,
+          validate: async (again) => (again === master ? attempt(() => api.vaultOpen(master, true)) : "The passwords do not match"),
+        });
+        return created !== null;
       }
-      return true;
+      const unlocked = await dialogs.prompt("Master password for the saved passwords", "Unlock", {
+        secret: true,
+        validate: (master) => attempt(() => api.vaultOpen(master, false)),
+      });
+      return unlocked !== null;
     } catch (e) {
       await dialogs.alert(errText(e));
       return false;
