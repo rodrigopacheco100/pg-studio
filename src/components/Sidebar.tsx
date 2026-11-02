@@ -50,6 +50,7 @@ export function Sidebar(p: Props) {
   const [over, setOver] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
   const browsing = p.activeId === null;
+  const topLevel = p.connections.filter((c) => c.folder_id === null || !p.folders.some((f) => f.id === c.folder_id));
 
   function start(e: React.DragEvent, d: NonNullable<typeof drag.current>) {
     drag.current = d;
@@ -121,6 +122,18 @@ export function Sidebar(p: Props) {
   return (
     <aside className="relative flex min-h-0 flex-col border-r bg-sidebar text-sidebar-foreground">
       <ResizeHandle axis="x" size={settings.sidebarWidth} min={180} max={560} onChange={(sidebarWidth) => update({ sidebarWidth })} />
+      {/* Dropping on the header (above the list) moves to the start. */}
+      <div
+        className={cn(browsing && over === "start" && "border-b-2 border-sidebar-primary")}
+        onDragOver={(e) => browsing && allow(e, "start")}
+        onDrop={(e) => {
+          e.preventDefault();
+          if (drag.current?.kind === "conn") p.onMoveConnection(drag.current.id, null, topLevel[0]?.id ?? null);
+          else if (drag.current) p.onMoveFolder(drag.current.id, p.folders[0]?.id ?? null);
+          drag.current = null;
+          setOver(null);
+        }}
+      >
       <SectionHeader title="Connections">
         <span className="flex gap-0.5">
           <Button variant="ghost" size="icon-xs" title="New folder" onClick={p.onNewFolder}>
@@ -131,7 +144,8 @@ export function Sidebar(p: Props) {
           </Button>
         </span>
       </SectionHeader>
-      <ul className="px-1.5" onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(null); }}>
+      </div>
+      <ul className={cn("px-1.5", browsing && "flex min-h-0 flex-1 flex-col")} onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setOver(null); }}>
         {/* Once connected, only the active connection stays, giving the tables the room; disconnecting lists all again. */}
         {browsing ? (
           <>
@@ -178,10 +192,10 @@ export function Sidebar(p: Props) {
                 </li>
               );
             })}
-            {p.connections.filter((c) => c.folder_id === null || !p.folders.some((f) => f.id === c.folder_id)).map(row)}
-            {/* Drop zone below the list: moves to the top level, or the folder to the end. */}
+            {topLevel.map(row)}
+            {/* Drop zone below the list, filling the free space: moves to the end of the top level, or the folder to the end. */}
             <li
-              className={cn("h-4", over === "end" && "border-t-2 border-sidebar-primary")}
+              className={cn("min-h-4 flex-1", over === "end" && "border-t-2 border-sidebar-primary")}
               onDragOver={(e) => allow(e, "end")}
               onDrop={(e) => {
                 e.preventDefault();
