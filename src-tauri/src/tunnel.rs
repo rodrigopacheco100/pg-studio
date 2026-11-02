@@ -1,50 +1,14 @@
 //! SSH tunnel to the PostgreSQL server: authenticates with russh and forwards a local port on
 //! 127.0.0.1 to the database host through the SSH server (like `ssh -L`).
 
-use crate::persist::JsonStore;
+use crate::known_hosts::KnownHosts;
 use crate::storage::connections::ConnectionConfig;
 use russh::client::{self, Handle};
 use russh::keys::{agent::client::AgentClient, ssh_key::HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate};
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::net::TcpListener;
-
-/// Fingerprints of the SSH servers seen so far (`host:port` -> `SHA256:...`), persisted in `known_hosts.json`.
-#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
-pub struct Trusted {
-    hosts: BTreeMap<String, String>,
-}
-
-/// Trust on first use: the first key a server presents is remembered, and a different one later is
-/// refused (it may be a man-in-the-middle). To accept a legitimately changed key, remove the entry
-/// from `known_hosts.json`.
-#[derive(Clone)]
-pub struct KnownHosts(Arc<Mutex<JsonStore<Trusted>>>);
-
-impl KnownHosts {
-    pub fn load(path: PathBuf) -> Self {
-        Self(Arc::new(Mutex::new(JsonStore::load(path))))
-    }
-
-    fn check(&self, server: &str, fingerprint: &str) -> Result<(), String> {
-        let mut store = self.0.lock().map_err(|e| e.to_string())?;
-        let mut trusted = store.get();
-        match trusted.hosts.get(server) {
-            Some(known) if known == fingerprint => Ok(()),
-            Some(known) => Err(format!(
-                "The SSH server key of {server} changed (expected {known}, got {fingerprint}). \
-                 This may be an attack; if the change is legitimate, remove the entry from known_hosts.json."
-            )),
-            None => {
-                trusted.hosts.insert(server.to_string(), fingerprint.to_string());
-                store.set(trusted)
-            }
-        }
-    }
-}
 
 struct Verifier {
     hosts: KnownHosts,
@@ -173,22 +137,4 @@ pub async fn open(c: &ConnectionConfig, hosts: &KnownHosts) -> Result<Tunnel, St
         }
     });
     Ok(Tunnel { local_port, task })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn trusts_first_key_and_refuses_a_different_one() {
-        let path = std::env::temp_dir().join(format!("pg-studio-known-hosts-{}.json", std::process::id()));
-        let _ = std::fs::remove_file(&path);
-        let hosts = KnownHosts::load(path.clone());
-        assert!(hosts.check("db:22", "SHA256:aaa").is_ok());
-        assert!(hosts.check("db:22", "SHA256:aaa").is_ok());
-        assert!(hosts.check("db:22", "SHA256:bbb").unwrap_err().contains("changed"));
-        assert!(hosts.check("other:22", "SHA256:bbb").is_ok());
-        assert!(KnownHosts::load(path.clone()).check("db:22", "SHA256:bbb").is_err()); // persisted
-        let _ = std::fs::remove_file(path);
-    }
 }

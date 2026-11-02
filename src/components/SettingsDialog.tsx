@@ -3,6 +3,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { KnownHostsList } from "./KnownHostsList";
 import { useSettings } from "../hooks/useSettings";
 import { EDITOR_FONTS, type FontOption, pickFont, UI_FONTS } from "../lib/fonts";
 import type { Settings } from "../types";
@@ -98,6 +99,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             <TabsTrigger value="editor">Editor</TabsTrigger>
             <TabsTrigger value="query">Query</TabsTrigger>
             <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="security">Security</TabsTrigger>
           </TabsList>
 
           <TabsContent value="appearance" className={pane}>
@@ -168,6 +170,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               hint="Connections that ask for a password are never reconnected automatically."
             />
             <Toggle label="Confirm before closing a tab with unsaved changes" setting="confirmCloseDirty" />
+          </TabsContent>
+
+          <TabsContent value="security" className={pane}>
             <Field
               id="vault-lock"
               label="Lock the master-password vault when idle"
@@ -175,6 +180,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               choices={[{ value: 0, label: "Never" }, ...[5, 15, 30, 60].map((v) => ({ value: v, label: `After ${v} min` }))]}
               hint="Only applies where there is no system keychain."
             />
+            <KnownHostsList />
           </TabsContent>
         </Tabs>
         <DialogFooter>

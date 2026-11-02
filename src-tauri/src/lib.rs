@@ -1,4 +1,5 @@
 mod commands;
+mod known_hosts;
 mod pg;
 mod persist;
 mod secrets;
@@ -6,7 +7,7 @@ mod state;
 mod storage;
 mod tunnel;
 
-use commands::{connections, files, folders, history, preferences, queries, vault};
+use commands::{connections, files, folders, history, preferences, queries, ssh, vault};
 use state::AppState;
 use tauri::Manager;
 
@@ -34,6 +35,8 @@ pub fn run() {
             folders::rename_folder,
             folders::delete_folder,
             folders::reorder_folders,
+            ssh::list_known_hosts,
+            ssh::forget_known_host,
             vault::vault_status,
             vault::vault_open,
             queries::refresh_tables,

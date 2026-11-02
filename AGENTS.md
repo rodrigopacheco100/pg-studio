@@ -17,7 +17,7 @@ Desktop PostgreSQL client. Tauri 2 (Rust) + React 19 + TypeScript + Vite + Tailw
 - `src-tauri/src/storage/`: local SQLite (`pg-studio.sqlite`), one module per table: `connections`, `folders`, `history`, `saved_queries`. Each owns its schema (`init`, including upgrades of older databases) and exposes plain functions taking `&Connection`, used as `connections::list`, `history::add`…
 - `src-tauri/src/pg/`: PostgreSQL access: `connection` (open, cancel), `query` (run, typed results), `error` (error text), `catalog` (tables, details, items).
 - `src-tauri/src/persist/`: `JsonStore<T>`, a value persisted as JSON (atomic writes, defaults on a missing/corrupted file), with `settings` (program settings) and `session` (work in progress) built on it.
-- `src-tauri/src/secrets.rs`, `tunnel.rs`: password storage and the SSH tunnel (below).
+- `src-tauri/src/secrets.rs`, `tunnel.rs`, `known_hosts.rs`: password storage, the SSH tunnel and its trusted host keys (below).
 - `src/App.tsx`: layout (sidebar + Query/History/Saved tabs + status bar). `QueryView` stays mounted to preserve the editor.
 - `src/hooks/`: UI state (`useConnections`, `useResults`, `useSettings`). `src/components/`, `src/views/`, `src/lib/` (pure utilities, with tests). shadcn components in `src/components/ui/`.
 - `src/types.ts`: types shared with the backend (serde in camelCase where noted).
@@ -50,7 +50,7 @@ Current settings:
 | `vaultAutoLockMinutes` | 0 | Lock the master-password vault after this idle time (`AppState::watch_vault_idle`); 0 = never |
 | `confirmCloseDirty` | `true` | Ask before closing a tab with unsaved changes (`useDocuments`) |
 
-`SettingsDialog` groups them in tabs (Appearance, Editor, Query, General); `Field` (dropdown with presets) and `Toggle` bind one setting each, so a new setting is one more line there.
+`SettingsDialog` groups them in tabs (Appearance, Editor, Query, General, Security — the last also lists the known SSH servers); `Field` (dropdown with presets) and `Toggle` bind one setting each, so a new setting is one more line there.
 
 Values are integers (`u32` in Rust); round before saving.
 
@@ -97,7 +97,7 @@ Passwords are never kept in SQLite. `src-tauri/src/secrets.rs` (`Secrets`, in `A
 
 ## SSH tunnel
 
-A connection can reach the server through SSH (`ssh_*` fields of `ConnectionConfig`/`Conn`, columns in `connections`). `src-tauri/src/tunnel.rs` (russh) authenticates with a private key (optional passphrase), a password or the ssh-agent, then listens on `127.0.0.1:<random port>` and forwards each connection to the database `host:port` through the SSH server. `AppState::route` (`state.rs`) opens the tunnel and returns the config `pg::open` should use (host/port pointing at the local end); `Active` keeps the `Tunnel` alive (dropping it closes everything), the tunneled `config` for `pg::open` / the background count, and the `origin` config so a dropped connection rebuilds the tunnel in `AppState::client`. The SSH password / passphrase is `ssh_secret`: handled exactly like `password` (secret store key `connection-<id>-ssh`, blank in lists, blank on save keeps it, asked at connect when `save_password` is off). Host keys use trust on first use (`known_hosts.json`): a changed key is refused until its entry is removed. The ssh-agent uses `SSH_AUTH_SOCK` on unix and the OpenSSH named pipe on Windows.
+A connection can reach the server through SSH (`ssh_*` fields of `ConnectionConfig`/`Conn`, columns in `connections`). `src-tauri/src/tunnel.rs` (russh) authenticates with a private key (optional passphrase), a password or the ssh-agent, then listens on `127.0.0.1:<random port>` and forwards each connection to the database `host:port` through the SSH server. `AppState::route` (`state.rs`) opens the tunnel and returns the config `pg::open` should use (host/port pointing at the local end); `Active` keeps the `Tunnel` alive (dropping it closes everything), the tunneled `config` for `pg::open` / the background count, and the `origin` config so a dropped connection rebuilds the tunnel in `AppState::client`. The SSH password / passphrase is `ssh_secret`: handled exactly like `password` (secret store key `connection-<id>-ssh`, blank in lists, blank on save keeps it, asked at connect when `save_password` is off). Host keys use trust on first use (`src-tauri/src/known_hosts.rs`, persisted in `known_hosts.json`): a changed key is refused until the server is forgotten in Settings › Security (`KnownHostsList`, commands `list_known_hosts` / `forget_known_host`). The ssh-agent uses `SSH_AUTH_SOCK` on unix and the OpenSSH named pipe on Windows.
 
 ## Context menus
 

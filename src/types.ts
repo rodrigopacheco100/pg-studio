@@ -22,6 +22,12 @@ export interface Conn {
   save_password: boolean;
 }
 
+export interface KnownHost {
+  /** `host:port` of the SSH server. */
+  server: string;
+  fingerprint: string;
+}
+
 export interface VaultStatus {
   /** `null` when the system keychain works, otherwise why it does not. */
   keychainProblem: string | null;

@@ -7,6 +7,7 @@ pub mod folders;
 pub mod history;
 pub mod preferences;
 pub mod queries;
+pub mod ssh;
 pub mod vault;
 
 pub use crate::state::CmdResult;

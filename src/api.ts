@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Conn, DetailItem, Folder, DetailKind, ItemDetailsMap, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, TableInfo, VaultStatus } from "./types";
+import type { Conn, DetailItem, Folder, KnownHost, DetailKind, ItemDetailsMap, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, TableInfo, VaultStatus } from "./types";
 
 /** One typed wrapper per Tauri command defined in src-tauri/src/lib.rs. */
 export const api = {
@@ -8,6 +8,8 @@ export const api = {
   saveConnection: (config: Conn) => invoke<number>("save_connection", { config }),
   deleteConnection: (id: number) => invoke<void>("delete_connection", { id }),
   reorderConnections: (items: { id: number; folder_id: number | null }[]) => invoke<void>("reorder_connections", { items }),
+  listKnownHosts: () => invoke<KnownHost[]>("list_known_hosts"),
+  forgetKnownHost: (server: string) => invoke<void>("forget_known_host", { server }),
   vaultStatus: () => invoke<VaultStatus>("vault_status"),
   /** Creates (`create`) or unlocks the master-password vault used when there is no system keychain. */
   vaultOpen: (password: string, create: boolean) => invoke<void>("vault_open", { password, create }),
