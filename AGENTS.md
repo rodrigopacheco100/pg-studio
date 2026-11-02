@@ -79,6 +79,10 @@ Passwords are never kept in SQLite. `src-tauri/src/secrets.rs` (`Secrets`, in `A
 
 `list_connections` returns passwords blank; saving with a blank password keeps the stored one. `save_password` (checkbox in `ConnectionDialog`) decides whether to store at all: when off, the password is asked in a masked `dialogs.prompt(..., { secret: true })` at each connect and passed to `connect(id, password)`. Passwords left in SQLite by older versions are moved into the store at startup and after the vault is unlocked (`local::migrate_passwords`); until then they still work.
 
+## SSH tunnel
+
+A connection can reach the server through SSH (`ssh_*` fields of `ConnectionConfig`/`Conn`, columns in `connections`). `src-tauri/src/tunnel.rs` (russh) authenticates with a private key (optional passphrase), a password or the ssh-agent, then listens on `127.0.0.1:<random port>` and forwards each connection to the database `host:port` through the SSH server. `route()` in `lib.rs` opens the tunnel and returns the config `pg::open` should use (host/port pointing at the local end); `Active` keeps the `Tunnel` alive (dropping it closes everything), the tunneled `config` for `pg::open` / the background count, and the `origin` config so a dropped connection rebuilds the tunnel in `AppState::client`. The SSH password / passphrase is `ssh_secret`: handled exactly like `password` (secret store key `connection-<id>-ssh`, blank in lists, blank on save keeps it, asked at connect when `save_password` is off). Host keys use trust on first use (`known_hosts.json`): a changed key is refused until its entry is removed. The ssh-agent uses `SSH_AUTH_SOCK` on unix and the OpenSSH named pipe on Windows.
+
 ## Menu and preferences
 
 - `AppMenu` (`src/components/AppMenu.tsx`, radix menubar in `ui/menubar.tsx`) is the menu bar: File, Query, Connection, Settings. It only receives callbacks (`MenuActions`); `App` wires them to `useDocuments`, the connections hook and `QueryView`'s handle (`QueryViewHandle`: run, runAtCursor, format, saveQuery). Keyboard shortcuts are handled in `QueryView`; the menu only displays them, so keep both in sync.

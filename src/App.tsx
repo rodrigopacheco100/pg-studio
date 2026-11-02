@@ -67,14 +67,21 @@ export function App() {
       if (c.id === ws.activeId) await ws.disconnect();
       else {
         let password: string | undefined;
+        let sshSecret: string | undefined;
         if (c.save_password) {
           if (!(await ensureVault())) return;
         } else {
           const typed = await dialogs.prompt(`Password for ${c.user}@${c.host}`, c.name, { secret: true });
           if (typed === null) return;
           password = typed;
+          if (c.ssh_enabled && c.ssh_auth !== "agent") {
+            const what = c.ssh_auth === "password" ? "SSH password" : "SSH key passphrase (empty if none)";
+            const ssh = await dialogs.prompt(`${what} for ${c.ssh_user}@${c.ssh_host}`, c.name, { secret: true });
+            if (ssh === null) return;
+            sshSecret = ssh;
+          }
         }
-        await ws.connect(c.id!, password);
+        await ws.connect(c.id!, password, sshSecret);
       }
       session.update({ connectionId: ws.activeId === c.id ? null : c.id });
       resetWorkspace();

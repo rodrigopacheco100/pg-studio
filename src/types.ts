@@ -9,7 +9,16 @@ export interface Conn {
   ssl: boolean;
   /** Folder the connection is filed under; `null` = top level. */
   folder_id: number | null;
-  /** When false the password is not stored and is asked on every connect. */
+  /** Reach the server through an SSH tunnel. */
+  ssh_enabled: boolean;
+  ssh_host: string;
+  ssh_port: number;
+  ssh_user: string;
+  ssh_auth: "key" | "password" | "agent";
+  ssh_key_path: string;
+  /** SSH password or key passphrase; like `password`, never returned by the backend. */
+  ssh_secret: string;
+  /** When false the passwords are not stored and is asked on every connect. */
   save_password: boolean;
 }
 

@@ -28,10 +28,10 @@ export function useConnections(restoreId: number | null) {
   }, []);
 
   /** Throws if the connection fails. */
-  const connect = useCallback(async (id: number, password?: string) => {
+  const connect = useCallback(async (id: number, password?: string, sshSecret?: string) => {
     setConnecting(true);
     try {
-      setTables(await api.connect(id, password));
+      setTables(await api.connect(id, password, sshSecret));
       setActiveId(id);
     } finally {
       setConnecting(false);

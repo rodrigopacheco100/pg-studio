@@ -18,7 +18,7 @@ export const api = {
   reorderFolders: (ids: number[]) => invoke<void>("reorder_folders", { ids }),
   testConnection: (config: Conn) => invoke<void>("test_connection", { config }),
 
-  connect: (id: number, password?: string) => invoke<TableInfo[]>("connect", { id, password }),
+  connect: (id: number, password?: string, sshSecret?: string) => invoke<TableInfo[]>("connect", { id, password, sshSecret }),
   disconnect: () => invoke<void>("disconnect"),
   refreshTables: () => invoke<TableInfo[]>("refresh_tables"),
 
@@ -59,5 +59,8 @@ export const files = {
   read: (path: string) => invoke<string>("read_text_file", { path }),
   write: (path: string, content: string) => invoke<void>("write_text_file", { path, content }),
 };
+
+/** Private key file for the SSH tunnel; `null` if the dialog was cancelled. */
+export const pickKeyFile = () => open({ multiple: false });
 
 export const errText = (e: unknown) => (typeof e === "string" ? e : e instanceof Error ? e.message : String(e));
