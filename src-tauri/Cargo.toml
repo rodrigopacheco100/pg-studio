@@ -7,6 +7,14 @@ edition = "2021"
 name = "pg_studio_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# End-to-end test server (src/bin/e2e_server.rs): the real commands behind HTTP, on Tauri's mock runtime.
+e2e = ["tauri/test", "dep:tiny_http"]
+
+[[bin]]
+name = "e2e_server"
+required-features = ["e2e"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -20,6 +28,7 @@ tokio-postgres = "0.7"
 native-tls = "0.2"
 postgres-native-tls = "0.5"
 tauri-plugin-dialog = "2"
+tiny_http = { version = "0.12", optional = true }
 argon2 = "0.5"
 chacha20poly1305 = "0.10"
 base64 = "0.22"

@@ -9,11 +9,14 @@ use crate::tunnel::{self, Tunnel};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::Mutex as AsyncMutex;
 use tokio_postgres::Client;
 
 pub type CmdResult<T> = Result<T, String>;
+
+/// Tells the frontend something happened (an event name, no payload).
+pub type Notifier = Box<dyn Fn(&str) + Send + Sync>;
 
 /// Active connection and the config used to open it (the background count opens its own).
 pub struct Active {
@@ -27,7 +30,7 @@ pub struct Active {
 }
 
 pub struct AppState {
-    app: AppHandle,
+    notify: Notifier,
     store: Mutex<rusqlite::Connection>,
     pub secrets: Arc<Secrets>,
     pub known_hosts: KnownHosts,
@@ -46,9 +49,9 @@ fn lock<T>(m: &Mutex<T>) -> CmdResult<MutexGuard<'_, T>> {
 impl AppState {
     /// Opens the local stores in `dir`. Passwords left in SQLite by older versions move to the secret
     /// store (or stay until the vault is unlocked).
-    pub fn open(app: AppHandle, dir: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn open(notify: Notifier, dir: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let state = Self {
-            app,
+            notify,
             store: Mutex::new(storage::open(&dir.join("pg-studio.sqlite"))?),
             secrets: Arc::new(Secrets::load(dir.join("vault.json"))),
             known_hosts: KnownHosts::load(dir.join("known_hosts.json")),
@@ -62,7 +65,7 @@ impl AppState {
     }
 
     /// Locks the master-password vault after the configured idle time. Call once, after the state is managed.
-    pub fn watch_vault_idle(app: &AppHandle) {
+    pub fn watch_vault_idle<R: Runtime>(app: &AppHandle<R>) {
         let app = app.clone();
         tauri::async_runtime::spawn(async move {
             loop {
@@ -157,7 +160,7 @@ impl AppState {
             active.config = config;
             active._tunnel = tunnel;
             // The new session lost open transactions, SET, temporary tables, etc.
-            let _ = self.app.emit("connection-restored", ());
+            (self.notify)("connection-restored");
         }
         Ok(active.client.clone())
     }
