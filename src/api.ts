@@ -68,6 +68,10 @@ export const files = {
   write: (path: string, content: string) => invoke<void>("write_text_file", { path, content }),
 };
 
+/** Where to save an export of the results; `null` if the dialog was cancelled. */
+export const pickExportPath = (defaultPath: string, extension: string) =>
+  save({ defaultPath, filters: [{ name: extension.toUpperCase(), extensions: [extension] }] });
+
 /** A theme JSON file picked by the user; `null` if the dialog was cancelled. */
 export const pickThemeFile = () => open({ multiple: false, filters: [{ name: "Theme", extensions: ["json"] }, { name: "All files", extensions: ["*"] }] });
 

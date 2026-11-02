@@ -1,5 +1,7 @@
 import { useMemo } from "react";
-import { NO_VIEW } from "../lib/gridView";
+import { api, pickExportPath, files } from "../api";
+import { ALL_ROWS, EXPORT_FORMATS, formatResult, type ExportFormat } from "../lib/exportResult";
+import { NO_VIEW, toGridQuery } from "../lib/gridView";
 import { type ResultsApi } from "../hooks/useResults";
 import { ResultViewer } from "./ResultViewer";
 
@@ -15,6 +17,22 @@ export function ResultsPane({ results }: { results: ResultsApi }) {
     return displayed.map((r) => ({ ...r, rows: r.rows.slice(from, from + pageSize) }));
   }, [displayed, source, pageSize]);
 
+  /**
+   * Saves every row of result `index` (not just the page) as `format`, in the sorted and filtered order on screen.
+   * A table's rows are fetched again, whole; a query's are already here. Returns what to tell the user, `null` if cancelled.
+   */
+  async function exportResult(index: number, format: ExportFormat): Promise<string | null> {
+    const shown = displayed[index];
+    const { extension, label } = EXPORT_FORMATS.find((f) => f.id === format)!;
+    const path = await pickExportPath(`${table?.name ?? "result"}.${extension}`, extension);
+    if (!path) return null;
+    const all = table
+      ? await api.tableData(table.schema, table.name, ALL_ROWS, 0, toGridQuery(views[index] ?? NO_VIEW, shown.columns))
+      : shown;
+    await files.write(path, formatResult(format, all, table));
+    return `${all.rows.length} row(s) exported as ${label}`;
+  }
+
   const msg = "p-4 text-sm text-muted-foreground";
   return (
     <div className="min-h-0 flex-1 overflow-auto">
@@ -27,7 +45,7 @@ export function ResultsPane({ results }: { results: ResultsApi }) {
       )}
       {outcome?.kind === "ok" && (
         <>
-          {visible.map((r, i) => <ResultViewer key={i} result={r} table={table} view={views[i] ?? NO_VIEW} onViewChange={(v) => setView(i, v)} />)}
+          {visible.map((r, i) => <ResultViewer key={i} result={r} table={table} view={views[i] ?? NO_VIEW} onViewChange={(v) => setView(i, v)} onExport={(f) => exportResult(i, f)} />)}
           {visible.length === 0 && <div className={msg}>No results.</div>}
         </>
       )}

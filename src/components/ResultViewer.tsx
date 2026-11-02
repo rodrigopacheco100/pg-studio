@@ -6,6 +6,9 @@ import {
 import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { EXPORT_FORMATS, type ExportFormat } from "../lib/exportResult";
+import { useDialogs } from "../hooks/useDialogs";
+import { errText } from "../api";
 import { isActive, nextSort, NO_VIEW, withFilter, type GridView } from "../lib/gridView";
 import { toCsv, toInsert, toJson, toTsv, type Row } from "../lib/rowFormat";
 import {
@@ -42,6 +45,8 @@ interface Props {
   /** Sort and filters of the result; the owner applies them to `result` (it already comes sorted and filtered). */
   view: GridView;
   onViewChange: (view: GridView) => void;
+  /** Saves every row of the result (not just the page) to a file the user picks; resolves with a message, or `null` if cancelled. */
+  onExport: (format: ExportFormat) => Promise<string | null>;
 }
 
 /** Reads the position (row/column) of a grid element; undefined outside it. */
@@ -113,7 +118,8 @@ function renderMenu(items: MenuItem[]): React.ReactNode {
 }
 
 /** Single results viewer: cell/row/column selection, drag and context menu. */
-export function ResultViewer({ result, table, view, onViewChange }: Props) {
+export function ResultViewer({ result, table, view, onViewChange, onExport }: Props) {
+  const dialogs = useDialogs();
   const [filtering, setFiltering] = useState(false);
   const columnsKey = result.columns.join("\u0000");
   useEffect(() => setFiltering(false), [columnsKey]);
@@ -202,12 +208,25 @@ export function ResultViewer({ result, table, view, onViewChange }: Props) {
   async function copy(text: string, what: string) {
     try {
       await navigator.clipboard.writeText(text);
-      setNotice(`${what} copied`);
+      flash(`${what} copied`);
     } catch {
-      setNotice("Could not copy");
+      flash("Could not copy");
     }
+  }
+
+  function flash(message: string) {
+    setNotice(message);
     window.clearTimeout(noticeTimer.current);
     noticeTimer.current = window.setTimeout(() => setNotice(""), 2000);
+  }
+
+  async function exportAll(format: ExportFormat) {
+    try {
+      const done = await onExport(format);
+      if (done) flash(done);
+    } catch (e) {
+      void dialogs.alert(`Could not export the rows:\n${errText(e)}`);
+    }
   }
 
   function selectAll() {
@@ -329,6 +348,10 @@ export function ResultViewer({ result, table, view, onViewChange }: Props) {
           { label: "TSV", onSelect: () => copy(toTsv(names, data), "TSV") },
           ...(table ? [{ label: "INSERT", onSelect: () => copy(toInsert(table, names, data), "INSERT") }] : []),
         ],
+      },
+      {
+        label: "Export all rows",
+        items: EXPORT_FORMATS.filter((f) => f.id !== "insert" || table).map((f) => ({ label: f.label, onSelect: () => void exportAll(f.id) })),
       },
       { separator: true },
       { label: "Select all", onSelect: selectAll },

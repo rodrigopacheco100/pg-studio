@@ -141,6 +141,19 @@ export class Studio {
     return this.page.locator("td[data-c]");
   }
 
+  /** The next "save as" dialog answers `path`, a path on the backend's filesystem (it writes the file). */
+  async answerSaveDialog(path: string) {
+    await this.page.evaluate((p) => ((window as unknown as { __E2E_SAVE_PATH: string }).__E2E_SAVE_PATH = p), path);
+  }
+
+  /** Text of a file on the backend's filesystem, read with the app's own `read_text_file` command. */
+  async readBackendFile(path: string): Promise<string> {
+    return this.page.evaluate(
+      (p) => (window as unknown as { __TAURI_INTERNALS__: { invoke: (cmd: string, args: object) => Promise<string> } }).__TAURI_INTERNALS__.invoke("read_text_file", { path: p }),
+      path,
+    );
+  }
+
   /** Closes the open dialog with Escape. */
   async dismissDialog() {
     await this.page.keyboard.press("Escape");
