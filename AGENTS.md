@@ -59,6 +59,12 @@ Values are integers (`u32` in Rust); round before saving.
 - Frontend: `SessionProvider` / `useSession()` give `initial` (the session at startup, constant) and `update(patch)`. Each owner records its own part: `useDocuments` on every change of docs/active tab, `App` on connect/disconnect/delete. `useConnections(restoreId)` reconnects once at startup and ignores failures (the id is kept, so a down server does not forget the connection).
 - Persistence helpers: `usePersistedState` (load once, debounced save on change) is shared by settings and session; `lib/persist.ts` debounces and `flushOnClose()` (called in `main.tsx`) writes everything pending when the window closes (needs `core:window:allow-destroy`).
 
+## Table tree (sidebar)
+
+`TableNode` (`src/components/TableNode.tsx`): the arrow at the left of each table expands folders Columns, Constraints, Foreign Keys, Indexes and Permissions (views only get Columns and Permissions). A folder's contents are fetched lazily the first time it is expanded through `table_details(schema, table, kind)` (`pg::table_details`, catalog queries returning `{ name, detail }` rows). To add a folder: a `kind` branch in `pg::table_details`, the `DetailKind` in `src/types.ts`, and an entry in `FOLDERS`. A new table list (refresh, reconnect) remounts the nodes, which drops their cached details.
+
+Double-clicking an item opens `ItemDetailsDialog`, which calls `table_item(schema, table, kind, name)`: `pg::table_item` builds one JSON document per kind in SQL (`json_build_object` over `pg_catalog`), typed in `src/types.ts` (`ColumnDetails`, `ConstraintDetails`, `ForeignKeyDetails`, `IndexDetails`, `PermissionDetails`, mapped by `ItemDetailsMap`). `src/components/itemScreens.tsx` has one screen per kind plus the shared blocks (`Properties`, `Section`, `Table`, `Code`). A new kind needs: the SQL branch, its type + `ItemDetailsMap` entry, and a screen.
+
 ## Conventions
 
 - Backend errors are `String` (`CmdResult<T>`); on the frontend use `errText`.

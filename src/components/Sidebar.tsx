@@ -1,9 +1,11 @@
-import { Database, Eye, Pencil, Plus, RefreshCw, Table2, Trash2 } from "lucide-react";
+import { useRef } from "react";
+import { Database, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useSettings } from "../hooks/useSettings";
 import { ResizeHandle } from "./ResizeHandle";
+import { TableNode } from "./TableNode";
 import type { Conn, TableInfo, TableRef } from "../types";
 
 interface Props {
@@ -30,6 +32,13 @@ function SectionHeader({ title, children }: { title: string; children: React.Rea
 export function Sidebar(p: Props) {
   const { settings, update } = useSettings();
   let lastSchema = "";
+  // A refresh or reconnection yields a new table list; remounting collapses the nodes and drops their cached details.
+  const epoch = useRef(0);
+  const seen = useRef(p.tables);
+  if (seen.current !== p.tables) {
+    seen.current = p.tables;
+    epoch.current++;
+  }
   return (
     <aside className="relative flex min-h-0 flex-col border-r bg-sidebar text-sidebar-foreground">
       <ResizeHandle axis="x" size={settings.sidebarWidth} min={180} max={560} onChange={(sidebarWidth) => update({ sidebarWidth })} />
@@ -67,7 +76,7 @@ export function Sidebar(p: Props) {
 
       {p.activeId !== null && (
         <>
-          <SectionHeader title="Tabelas">
+          <SectionHeader title="Tables">
             <Button variant="ghost" size="icon-xs" title="Refresh" onClick={p.onRefreshTables}>
               <RefreshCw />
             </Button>
@@ -81,13 +90,7 @@ export function Sidebar(p: Props) {
                 return (
                   <div key={`${t.schema}.${t.name}`}>
                     {header && <div className="px-2 pt-2 pb-0.5 text-xs text-muted-foreground">{t.schema}</div>}
-                    <div
-                      onClick={() => p.onOpenTable({ schema: t.schema, name: t.name })}
-                      className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-sidebar-accent"
-                    >
-                      {t.kind === "VIEW" ? <Eye className="size-3.5 shrink-0" /> : <Table2 className="size-3.5 shrink-0" />}
-                      <span className="truncate">{t.name}</span>
-                    </div>
+                    <TableNode key={epoch.current} table={t} onOpen={p.onOpenTable} />
                   </div>
                 );
               })}

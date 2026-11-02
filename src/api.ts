@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Conn, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, TableInfo } from "./types";
+import type { Conn, DetailItem, DetailKind, ItemDetailsMap, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, TableInfo } from "./types";
 
 /** One typed wrapper per Tauri command defined in src-tauri/src/lib.rs. */
 export const api = {
@@ -17,6 +17,10 @@ export const api = {
   tableData: (schema: string, table: string, limit: number, offset: number) =>
     invoke<QueryResult>("table_data", { schema, table, limit, offset }),
 
+  tableDetails: (schema: string, table: string, kind: DetailKind) =>
+    invoke<DetailItem[]>("table_details", { schema, table, kind }),
+  tableItem: <K extends DetailKind>(schema: string, table: string, kind: K, name: string) =>
+    invoke<ItemDetailsMap[K]>("table_item", { schema, table, kind, name }),
   tableCount: (schema: string, table: string) => invoke<number>("table_count", { schema, table }),
 
   listHistory: () => invoke<HistoryEntry[]>("list_history"),
