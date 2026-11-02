@@ -6,7 +6,7 @@ mod session;
 mod settings;
 
 use local::{ConnectionConfig, HistoryEntry, SavedQuery};
-use pg::{QueryResult, TableInfo};
+use pg::{DetailItem, QueryResult, TableInfo};
 use session::{Session, SessionStore};
 use settings::{Settings, SettingsStore};
 use serde::Serialize;
@@ -138,6 +138,24 @@ async fn table_data(
 }
 
 #[tauri::command]
+async fn table_details(state: State<'_, AppState>, schema: String, table: String, kind: String) -> CmdResult<Vec<DetailItem>> {
+    let client = state.client().await?;
+    pg::table_details(&client, &schema, &table, &kind).await
+}
+
+#[tauri::command]
+async fn table_item(
+    state: State<'_, AppState>,
+    schema: String,
+    table: String,
+    kind: String,
+    name: String,
+) -> CmdResult<serde_json::Value> {
+    let client = state.client().await?;
+    pg::table_item(&client, &schema, &table, &kind, &name).await
+}
+
+#[tauri::command]
 async fn table_count(state: State<'_, AppState>, schema: String, table: String) -> CmdResult<u64> {
     let config = {
         let active = state.active.lock().await;
@@ -226,6 +244,8 @@ pub fn run() {
             run_query,
             table_data,
             table_count,
+            table_details,
+            table_item,
             list_history,
             clear_history,
             list_saved_queries,

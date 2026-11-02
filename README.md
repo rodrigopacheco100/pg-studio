@@ -5,7 +5,7 @@ A lightweight desktop client for PostgreSQL, built with Tauri 2 (Rust) and React
 ## Features
 
 - Saved connections (with optional SSL), opened and closed from the sidebar
-- Table list of the connected database; click one to browse its contents, paginated
+- Table list of the connected database; click one to browse its contents, paginated, or expand it to see its columns, constraints, foreign keys, indexes and permissions; double-click any of them for full details
 - SQL editor (CodeMirror) with table and column autocomplete
 - Editor tabs: create, open, save and save as `.sql` files (`Ctrl+T`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+W`), with an unsaved-changes marker
 - A ▶ button beside the first line of each statement runs just that statement
