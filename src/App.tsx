@@ -9,6 +9,7 @@ import { errText } from "./api";
 import { useConnections } from "./hooks/useConnections";
 import { useSession } from "./hooks/useSession";
 import { useSettings } from "./hooks/useSettings";
+import { useDialogs } from "./hooks/useDialogs";
 import { useDocuments } from "./hooks/useDocuments";
 import { useResults } from "./hooks/useResults";
 import type { Conn } from "./types";
@@ -19,6 +20,7 @@ import { SavedView } from "./views/SavedView";
 type View = "query" | "history" | "saved";
 
 export function App() {
+  const dialogs = useDialogs();
   const session = useSession();
   const ws = useConnections(session.initial.connectionId);
   const results = useResults();
@@ -61,12 +63,12 @@ export function App() {
       session.update({ connectionId: ws.activeId === c.id ? null : c.id });
       resetWorkspace();
     } catch (e) {
-      alert(`Failed to connect:\n${errText(e)}`);
+      void dialogs.alert(`Failed to connect:\n${errText(e)}`);
     }
   }
 
   async function remove(c: Conn) {
-    if (!confirm("Delete this connection?")) return;
+    if (!(await dialogs.confirm("Delete this connection?", { title: "Delete connection", confirmLabel: "Delete" }))) return;
     const wasActive = c.id === ws.activeId;
     await ws.remove(c.id!);
     if (wasActive) {
@@ -94,7 +96,7 @@ export function App() {
           onDelete={remove}
           onToggle={toggle}
           onOpenTable={(t) => { setView("query"); void results.openTable(t); }}
-          onRefreshTables={() => ws.refreshTables().catch((e) => alert(errText(e)))}
+          onRefreshTables={() => ws.refreshTables().catch((e) => dialogs.alert(errText(e)))}
         />
         <main className="flex min-h-0 min-w-0 flex-col">
           <div className="flex items-center justify-between border-b px-2 pt-1">
