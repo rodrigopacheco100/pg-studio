@@ -1,7 +1,8 @@
-//! Local storage (`pg-studio.sqlite`): saved connections and folders, history and saved queries.
+//! Local storage (`pg-studio.sqlite`): saved connections and folders, history, saved queries and exports.
 //! Each submodule owns its table and creates / upgrades it in `init`.
 
 pub mod connections;
+pub mod exports;
 pub mod folders;
 pub mod history;
 pub mod saved_queries;
@@ -15,5 +16,6 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     folders::init(&db)?;
     history::init(&db)?;
     saved_queries::init(&db)?;
+    exports::init(&db)?;
     Ok(db)
 }

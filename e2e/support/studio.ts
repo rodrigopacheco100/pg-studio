@@ -161,6 +161,18 @@ export class Studio {
     await this.page.getByRole("button", { name: "Search", exact: true }).click();
   }
 
+  /** Right-clicks the grid and starts exporting all its rows as `format` ("CSV", "JSON" or "SQL INSERT"). */
+  async exportAs(format: string) {
+    await this.cells.first().click({ button: "right" });
+    await this.page.getByRole("menuitem", { name: "Export all rows" }).click();
+    await this.page.getByRole("menuitem", { name: format, exact: true }).click();
+  }
+
+  /** The floating window of an export; `source` is `public.<table>`, or `Query results`. */
+  exportWindow(source: string): Locator {
+    return this.page.getByRole("dialog", { name: `Export ${source}`, exact: true });
+  }
+
   /** The next "save as" dialog answers `path`, a path on the backend's filesystem (it writes the file). */
   async answerSaveDialog(path: string) {
     await this.page.evaluate((p) => ((window as unknown as { __E2E_SAVE_PATH: string }).__E2E_SAVE_PATH = p), path);

@@ -1,11 +1,13 @@
 //! Application state shared by the commands.
 
+use crate::export::{ExportControl, ExportRequest};
 use crate::pg;
 use crate::persist::{session::Session, settings::Settings, themes::ThemeFiles, JsonStore};
 use crate::secrets::Secrets;
 use crate::storage::{self, connections::ConnectionConfig};
 use crate::known_hosts::KnownHosts;
 use crate::tunnel::{self, Tunnel};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
@@ -17,6 +19,9 @@ pub type CmdResult<T> = Result<T, String>;
 
 /// Tells the frontend something happened (an event name, no payload).
 pub type Notifier = Box<dyn Fn(&str) + Send + Sync>;
+
+/// Runs an export in the background (it needs the app handle to reach this state again, so `lib.rs` supplies it).
+pub type ExportSpawner = Box<dyn Fn(i64, ExportRequest, Arc<ExportControl>) + Send + Sync>;
 
 /// Active connection and the config used to open it (the background count opens its own).
 pub struct Active {
@@ -32,6 +37,7 @@ pub struct Active {
 
 pub struct AppState {
     notify: Notifier,
+    spawn_export: ExportSpawner,
     store: Mutex<rusqlite::Connection>,
     pub secrets: Arc<Secrets>,
     pub known_hosts: KnownHosts,
@@ -41,6 +47,8 @@ pub struct AppState {
     active: AsyncMutex<Option<Active>>,
     /// Connection of the count in progress; separate from the main one so it never delays the user's queries.
     counting: AsyncMutex<Option<Arc<pg::Session>>>,
+    /// The exports running now, by their id in the `exports` table.
+    exports: Mutex<HashMap<i64, Arc<ExportControl>>>,
 }
 
 /// Locks a std mutex, turning poisoning into a command error.
@@ -51,9 +59,10 @@ fn lock<T>(m: &Mutex<T>) -> CmdResult<MutexGuard<'_, T>> {
 impl AppState {
     /// Opens the local stores in `dir`. Passwords left in SQLite by older versions move to the secret
     /// store (or stay until the vault is unlocked).
-    pub fn open(notify: Notifier, dir: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn open(notify: Notifier, spawn_export: ExportSpawner, dir: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let state = Self {
             notify,
+            spawn_export,
             store: Mutex::new(storage::open(&dir.join("pg-studio.sqlite"))?),
             secrets: Arc::new(Secrets::load(dir.join("vault.json"))),
             known_hosts: KnownHosts::load(dir.join("known_hosts.json")),
@@ -62,6 +71,7 @@ impl AppState {
             themes: ThemeFiles::open(dir.join("styles"))?,
             active: AsyncMutex::new(None),
             counting: AsyncMutex::new(None),
+            exports: Mutex::new(HashMap::new()),
         };
         let _ = state.migrate_passwords();
         Ok(state)
@@ -176,15 +186,21 @@ impl AppState {
         Ok(active.session.client.clone())
     }
 
-    /// Counts rows on a connection of its own: the server handles one query at a time per connection, so
-    /// counting on the shared one would hold up the user's queries until count(*) finishes. Starting a new
-    /// count cancels the previous one.
-    pub async fn count_rows(&self, schema: &str, table: &str, view: &pg::GridQuery) -> CmdResult<u64> {
+    /// A connection of its own to the active database, for work that must not hold up the user's queries
+    /// (counting, exporting).
+    pub async fn background_session(&self) -> CmdResult<pg::Session> {
         let config = {
             let active = self.active.lock().await;
             active.as_ref().map(|a| a.config.clone()).ok_or_else(|| "Not connected".to_string())?
         };
-        let session = Arc::new(self.open_session(&config).await?);
+        self.open_session(&config).await
+    }
+
+    /// Counts rows on a connection of its own: the server handles one query at a time per connection, so
+    /// counting on the shared one would hold up the user's queries until count(*) finishes. Starting a new
+    /// count cancels the previous one.
+    pub async fn count_rows(&self, schema: &str, table: &str, view: &pg::GridQuery) -> CmdResult<u64> {
+        let session = Arc::new(self.background_session().await?);
         if let Some(previous) = self.counting.lock().await.replace(session.clone()) {
             tauri::async_runtime::spawn(async move { previous.cancel().await });
         }
@@ -196,6 +212,29 @@ impl AppState {
             *counting = None; // done: release the connection
         }
         total
+    }
+
+    /// Starts `request` in the background as export `id`.
+    pub fn start_export(&self, id: i64, request: ExportRequest) {
+        let control = Arc::new(ExportControl::default());
+        if let Ok(mut running) = lock(&self.exports) {
+            running.insert(id, control.clone());
+        }
+        (self.spawn_export)(id, request, control);
+    }
+
+    pub fn forget_export(&self, id: i64) {
+        if let Ok(mut running) = lock(&self.exports) {
+            running.remove(&id);
+        }
+    }
+
+    /// Stops a running export; nothing happens if it already ended.
+    pub async fn cancel_export(&self, id: i64) {
+        let control = lock(&self.exports).ok().and_then(|running| running.get(&id).cloned());
+        if let Some(control) = control {
+            control.cancel().await;
+        }
     }
 
     /// Interrupts, without waiting, the count in progress (if any).

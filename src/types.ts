@@ -1,3 +1,5 @@
+import type { GridQuery } from "./lib/gridView";
+
 export interface Conn {
   id: number | null;
   name: string;
@@ -76,6 +78,35 @@ export interface QueryResult {
 export interface QueryOutput {
   results: QueryResult[];
   duration_ms: number;
+}
+
+export type ExportFormat = "csv" | "json" | "insert";
+
+/** One file export as recorded in the local database; polled while it runs. */
+export interface ExportEntry {
+  id: number;
+  /** `schema.table`, or a label for a query's results. */
+  source: string;
+  format: ExportFormat;
+  path: string;
+  status: "running" | "done" | "cancelled" | "failed";
+  rows_done: number;
+  /** `null` while unknown (a table is still being counted). */
+  rows_total: number | null;
+  bytes: number;
+  error: string | null;
+  started_at: string;
+  /** Set once it ended. */
+  duration_ms: number | null;
+}
+
+/** What to export. A table is read from the server (whole, with the grid's sort and filters); a query's rows are sent. */
+export interface ExportRequest {
+  format: ExportFormat;
+  path: string;
+  source:
+    | { kind: "table"; schema: string; table: string; view: GridQuery }
+    | { kind: "rows"; label: string; columns: string[]; types: string[]; rows: (string | null)[][] };
 }
 
 export interface HistoryEntry {

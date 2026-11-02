@@ -5,7 +5,7 @@ import {
 } from "@/components/ui/context-menu";
 import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { EXPORT_FORMATS, type ExportFormat } from "../lib/exportResult";
+import { EXPORT_FORMATS } from "../lib/exportResult";
 import { useDialogs } from "../hooks/useDialogs";
 import { errText } from "../api";
 import { isActive, nextSort, NO_VIEW, type GridView } from "../lib/gridView";
@@ -15,7 +15,7 @@ import {
   cellRange, colRange, colsOf, contains, rowRange, rowsOf,
   type Cell, type Range,
 } from "../lib/selection";
-import type { QueryResult, TableRef } from "../types";
+import type { ExportFormat, QueryResult, TableRef } from "../types";
 import { JsonDialog } from "./JsonDialog";
 
 const EDGE = 28; // distance from the edge that triggers autoscroll while dragging
@@ -45,8 +45,8 @@ interface Props {
   /** Sort and filters of the result; the owner applies them to `result` (it already comes sorted and filtered). */
   view: GridView;
   onViewChange: (view: GridView) => void;
-  /** Saves every row of the result (not just the page) to a file the user picks; resolves with a message, or `null` if cancelled. */
-  onExport: (format: ExportFormat) => Promise<string | null>;
+  /** Starts exporting every row of the result (not just the page); the progress shows in its own window. */
+  onExport: (format: ExportFormat) => Promise<void>;
 }
 
 /** Reads the position (row/column) of a grid element; undefined outside it. */
@@ -222,10 +222,9 @@ export function ResultViewer({ result, table, view, onViewChange, onExport }: Pr
 
   async function exportAll(format: ExportFormat) {
     try {
-      const done = await onExport(format);
-      if (done) flash(done);
+      await onExport(format);
     } catch (e) {
-      void dialogs.alert(`Could not export the rows:\n${errText(e)}`);
+      void dialogs.alert(`Could not start the export:\n${errText(e)}`);
     }
   }
 

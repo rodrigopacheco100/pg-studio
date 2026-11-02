@@ -1,4 +1,5 @@
 mod commands;
+mod export;
 mod known_hosts;
 mod pg;
 mod persist;
@@ -7,7 +8,7 @@ mod state;
 mod storage;
 mod tunnel;
 
-use commands::{connections, files, folders, history, preferences, queries, ssh, themes, vault};
+use commands::{connections, exports, files, folders, history, preferences, queries, ssh, themes, vault};
 use state::AppState;
 use std::path::PathBuf;
 use tauri::{Builder, Emitter, Manager, Runtime};
@@ -29,7 +30,17 @@ pub fn configure<R: Runtime>(builder: Builder<R>, data_dir: Option<PathBuf>) -> 
                     let _ = handle.emit(event, ());
                 }
             });
-            app.manage(AppState::open(notify, &dir)?);
+            let spawn_export = Box::new({
+                let handle = handle.clone();
+                move |id, request, control: std::sync::Arc<export::ExportControl>| {
+                    let handle = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let state = handle.state::<AppState>();
+                        export::run(&state, id, request, &control).await;
+                    });
+                }
+            });
+            app.manage(AppState::open(notify, spawn_export, &dir)?);
             AppState::watch_vault_idle(&handle);
             Ok(())
         })
@@ -69,6 +80,10 @@ pub fn configure<R: Runtime>(builder: Builder<R>, data_dir: Option<PathBuf>) -> 
             preferences::set_settings,
             preferences::get_session,
             preferences::set_session,
+            exports::start_export,
+            exports::cancel_export,
+            exports::list_exports,
+            exports::clear_exports,
             files::read_text_file,
             files::write_text_file,
         ])

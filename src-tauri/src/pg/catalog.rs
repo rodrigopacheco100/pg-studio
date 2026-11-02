@@ -49,7 +49,11 @@ pub async fn list_tables(client: &Client) -> Result<Vec<TableInfo>, String> {
     Ok(tables)
 }
 
-fn quote_ident(s: &str) -> String {
+pub fn quote_literal(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "''"))
+}
+
+pub fn quote_ident(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
@@ -131,6 +135,11 @@ impl GridQuery {
     }
 }
 
+/// `SELECT *` of the table with the sort and filters of `view`, without pagination.
+pub fn table_select(schema: &str, table: &str, view: &GridQuery) -> Result<String, String> {
+    Ok(format!("SELECT * FROM {}.{}{}{}", quote_ident(schema), quote_ident(table), view.where_clause()?, view.order_clause()))
+}
+
 pub async fn table_data(
     client: &Client,
     schema: &str,
@@ -169,9 +178,7 @@ pub struct DetailItem {
     pub detail: String,
 }
 
-fn quote_literal(s: &str) -> String {
-    format!("'{}'", s.replace('\'', "''"))
-}
+
 
 /// Catalog details of one table, for the sidebar tree. `kind` is one of `columns`, `constraints`,
 /// `foreign_keys`, `indexes` or `permissions`.

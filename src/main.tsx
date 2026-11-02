@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { DialogsProvider } from "./hooks/useDialogs";
+import { ExportsProvider } from "./hooks/useExports";
 import { SessionProvider } from "./hooks/useSession";
 import { SettingsProvider } from "./hooks/useSettings";
 import { ThemeProvider } from "./hooks/useTheme";
@@ -20,7 +21,9 @@ createRoot(document.getElementById("root")!).render(
       <SettingsProvider>
         <ThemeProvider>
           <SessionProvider>
-            <App />
+            <ExportsProvider>
+              <App />
+            </ExportsProvider>
           </SessionProvider>
         </ThemeProvider>
       </SettingsProvider>

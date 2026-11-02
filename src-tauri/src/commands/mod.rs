@@ -2,6 +2,7 @@
 //! `AppState` / `storage` / `pg`; each one is registered in `lib.rs` and wrapped in `src/api.ts`.
 
 pub mod connections;
+pub mod exports;
 pub mod files;
 pub mod folders;
 pub mod history;

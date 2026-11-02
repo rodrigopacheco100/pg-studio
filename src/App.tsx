@@ -23,11 +23,12 @@ import { useDialogs } from "./hooks/useDialogs";
 import { useDocuments } from "./hooks/useDocuments";
 import { useResults } from "./hooks/useResults";
 import type { Conn, Folder } from "./types";
+import { ExportsView } from "./views/ExportsView";
 import { HistoryView } from "./views/HistoryView";
 import { QueryView, type QueryViewHandle } from "./views/QueryView";
 import { SavedView } from "./views/SavedView";
 
-type View = "query" | "history" | "saved";
+type View = "query" | "history" | "saved" | "exports";
 
 export function App() {
   const dialogs = useDialogs();
@@ -156,7 +157,7 @@ export function App() {
     setView("query");
   }
 
-  const tabs: [View, string][] = [["query", "Query"], ["history", "History"], ["saved", "Saved"]];
+  const tabs: [View, string][] = [["query", "Query"], ["history", "History"], ["saved", "Saved"], ["exports", "Exports"]];
 
   return (
     <TooltipProvider>
@@ -224,6 +225,7 @@ export function App() {
             </div>
             {view === "history" && <HistoryView onUse={useSql} />}
             {view === "saved" && <SavedView onUse={useSql} />}
+            {view === "exports" && <ExportsView />}
           </div>
         </main>
         <StatusBar connection={active} info={results.info} paging={results.paging} onPage={results.goToPage} restored={restored} />

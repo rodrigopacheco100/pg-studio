@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import type { GridQuery } from "./lib/gridView";
-import type { Conn, DetailItem, Folder, KnownHost, DetailKind, ItemDetailsMap, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, StoredTheme, TableInfo, VaultStatus } from "./types";
+import type { Conn, DetailItem, Folder, KnownHost, DetailKind, ItemDetailsMap, ExportEntry, ExportRequest, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, StoredTheme, TableInfo, VaultStatus } from "./types";
 
 /** One typed wrapper per Tauri command defined in src-tauri/src/lib.rs. */
 export const api = {
@@ -40,6 +40,13 @@ export const api = {
   tableItem: <K extends DetailKind>(schema: string, table: string, kind: K, name: string) =>
     invoke<ItemDetailsMap[K]>("table_item", { schema, table, kind, name }),
   tableCount: (schema: string, table: string, view: GridQuery) => invoke<number>("table_count", { schema, table, view }),
+
+  /** Starts a background export; resolves with its id at once. Follow it with `listExports`. */
+  startExport: (request: ExportRequest) => invoke<number>("start_export", { request }),
+  cancelExport: (id: number) => invoke<void>("cancel_export", { id }),
+  listExports: () => invoke<ExportEntry[]>("list_exports"),
+  /** Removes the history of finished exports. */
+  clearExports: () => invoke<void>("clear_exports"),
 
   listHistory: () => invoke<HistoryEntry[]>("list_history"),
   clearHistory: () => invoke<void>("clear_history"),

@@ -1,6 +1,8 @@
 import { useMemo } from "react";
-import { api, pickExportPath, files } from "../api";
-import { ALL_ROWS, EXPORT_FORMATS, formatResult, type ExportFormat } from "../lib/exportResult";
+import { pickExportPath } from "../api";
+import { useExports } from "../hooks/useExports";
+import { EXPORT_FORMATS } from "../lib/exportResult";
+import type { ExportFormat } from "../types";
 import { NO_VIEW, toGridQuery } from "../lib/gridView";
 import { type ResultsApi } from "../hooks/useResults";
 import { ResultViewer } from "./ResultViewer";
@@ -8,6 +10,7 @@ import { ResultViewer } from "./ResultViewer";
 /** Single results pane: shows the last query or the opened table. Pagination lives in the footer. */
 export function ResultsPane({ results }: { results: ResultsApi }) {
   const { outcome, displayed, views, source, pageSize, setView } = results;
+  const exports = useExports();
   const table = source.kind === "table" ? source.table : undefined;
 
   // Tables already arrive paginated from the server; queries arrive whole (sorted and filtered in `useResults`) and are sliced here.
@@ -18,19 +21,22 @@ export function ResultsPane({ results }: { results: ResultsApi }) {
   }, [displayed, source, pageSize]);
 
   /**
-   * Saves every row of result `index` (not just the page) as `format`, in the sorted and filtered order on screen.
-   * A table's rows are fetched again, whole; a query's are already here. Returns what to tell the user, `null` if cancelled.
+   * Starts an export of every row of result `index` (not just the page), in the sorted and filtered order on screen,
+   * after asking where to save it. A table is read again by the backend, whole, with the same view; a query's rows are sent.
+   * The progress shows in a floating window (`ExportWindows`).
    */
-  async function exportResult(index: number, format: ExportFormat): Promise<string | null> {
+  async function exportResult(index: number, format: ExportFormat) {
     const shown = displayed[index];
-    const { extension, label } = EXPORT_FORMATS.find((f) => f.id === format)!;
+    const { extension } = EXPORT_FORMATS.find((f) => f.id === format)!;
     const path = await pickExportPath(`${table?.name ?? "result"}.${extension}`, extension);
-    if (!path) return null;
-    const all = table
-      ? await api.tableData(table.schema, table.name, ALL_ROWS, 0, toGridQuery(views[index] ?? NO_VIEW, shown))
-      : shown;
-    await files.write(path, formatResult(format, all, table));
-    return `${all.rows.length} row(s) exported as ${label}`;
+    if (!path) return;
+    await exports.start({
+      format,
+      path,
+      source: table
+        ? { kind: "table", schema: table.schema, table: table.name, view: toGridQuery(views[index] ?? NO_VIEW, shown) }
+        : { kind: "rows", label: "Query results", columns: shown.columns, types: shown.types, rows: shown.rows },
+    });
   }
 
   const msg = "p-4 text-sm text-muted-foreground";
