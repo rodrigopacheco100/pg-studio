@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger,
+  ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent,
+  ContextMenuSubTrigger, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import { toCsv, toInsert, toJson, toTsv, type Row } from "../lib/rowFormat";
@@ -21,7 +22,7 @@ interface Drag {
   anchor: Cell;
 }
 
-type MenuItem = { separator: true } | { label: string; onSelect: () => void };
+type MenuItem = { separator: true } | { label: string; onSelect: () => void } | { label: string; items: MenuItem[] };
 
 interface MenuState {
   /** Cell under the cursor. */
@@ -89,6 +90,21 @@ const GridRow = memo(function GridRow({ row, r, sig, fullRow, types }: GridRowPr
     </tr>
   );
 });
+
+function renderMenu(items: MenuItem[]): React.ReactNode {
+  return items.map((item, i) =>
+    "separator" in item ? (
+      <ContextMenuSeparator key={i} />
+    ) : "items" in item ? (
+      <ContextMenuSub key={i}>
+        <ContextMenuSubTrigger>{item.label}</ContextMenuSubTrigger>
+        <ContextMenuSubContent>{renderMenu(item.items)}</ContextMenuSubContent>
+      </ContextMenuSub>
+    ) : (
+      <ContextMenuItem key={i} onSelect={item.onSelect}>{item.label}</ContextMenuItem>
+    ),
+  );
+}
 
 /** Single results viewer: cell/row/column selection, drag and context menu. */
 export function ResultViewer({ result, table }: Props) {
@@ -283,17 +299,24 @@ export function ResultViewer({ result, table }: Props) {
         ? [{ label: `View selection (${size}) as JSON`, onSelect: () => setJson(toJson(names, data, types)) }]
         : []),
       { separator: true },
-      { label: "Copy as JSON", onSelect: () => copy(toJson(names, data, types), "JSON") },
-      { label: "Copy as CSV", onSelect: () => copy(toCsv(names, data), "CSV") },
-      { label: "Copy as TSV", onSelect: () => copy(toTsv(names, data), "TSV") },
-      ...(table
-        ? [{ label: "Copy as INSERT", onSelect: () => copy(toInsert(table, names, data), "INSERT") }]
-        : []),
-      { separator: true },
-      { label: "Copy cell value", onSelect: () => copy(cell ?? "NULL", "Value") },
       {
-        label: names.length > 1 ? "Copy column names" : "Copy column name",
-        onSelect: () => copy(names.join(", "), "Name"),
+        label: "Copy",
+        items: [
+          { label: "Cell value", onSelect: () => copy(cell ?? "NULL", "Value") },
+          {
+            label: names.length > 1 ? "Column names" : "Column name",
+            onSelect: () => copy(names.join(", "), "Name"),
+          },
+        ],
+      },
+      {
+        label: "Copy as",
+        items: [
+          { label: "JSON", onSelect: () => copy(toJson(names, data, types), "JSON") },
+          { label: "CSV", onSelect: () => copy(toCsv(names, data), "CSV") },
+          { label: "TSV", onSelect: () => copy(toTsv(names, data), "TSV") },
+          ...(table ? [{ label: "INSERT", onSelect: () => copy(toInsert(table, names, data), "INSERT") }] : []),
+        ],
       },
       { separator: true },
       { label: "Select all", onSelect: selectAll },
@@ -360,14 +383,7 @@ export function ResultViewer({ result, table }: Props) {
           </table>
         </ContextMenuTrigger>
         <ContextMenuContent className="min-w-56">
-          {menu &&
-            menuItems(menu).map((item, i) =>
-              "separator" in item ? (
-                <ContextMenuSeparator key={i} />
-              ) : (
-                <ContextMenuItem key={i} onSelect={item.onSelect}>{item.label}</ContextMenuItem>
-              ),
-            )}
+          {menu && renderMenu(menuItems(menu))}
         </ContextMenuContent>
       </ContextMenu>
       {shown === 0 && <div className="px-3 py-2 text-sm text-muted-foreground">No rows.</div>}
