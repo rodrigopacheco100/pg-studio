@@ -137,6 +137,21 @@ jobs:
           workspaces: src-tauri
 
       # Anexa os instaladores ao release criado no job anterior.
+      # tauri-action puts `releaseBody` in latest.json as the notes the app shows in "Update available";
+      # without it they are empty. It is the body of the release created by the previous job.
+      - name: Read the release notes
+        id: notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+        shell: bash
+        run: |
+          {
+            echo "body<<RELEASE_NOTES_EOF"
+            gh release view "$TAG" --json body --jq .body
+            echo "RELEASE_NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -145,4 +160,5 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ needs.prepare.outputs.tag }}
+          releaseBody: ${{ steps.notes.outputs.body }}
           args: ${{ matrix.args }}

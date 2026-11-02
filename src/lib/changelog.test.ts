@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { compareVersions, parseChangelog, releasesBetween } from "./changelog";
+import { compareVersions, noteBlocks, parseChangelog, releasesBetween } from "./changelog";
 
 const sample = `# Changelog
 
@@ -38,4 +38,15 @@ test("selects what changed after the last seen version, up to the current one", 
   expect(releasesBetween(all, "0.3.0", "0.5.0").map((r) => r.version)).toEqual(["0.5.0", "0.4.0"]);
   expect(releasesBetween(all, "0.4.0", "0.4.0")).toEqual([]);
   expect(releasesBetween(all, "0.3.0", "0.4.0").map((r) => r.version)).toEqual(["0.4.0"]);
+});
+
+test("noteBlocks splits a release body into headings, bullets and text", () => {
+  const body = "## What changed\n\n- feat: a (abc)\n- fix: b (def)\n\n**Full comparison:** https://example.com/compare/v1...v2\n";
+  expect(noteBlocks(body)).toEqual([
+    { kind: "heading", text: "What changed" },
+    { kind: "item", text: "feat: a (abc)" },
+    { kind: "item", text: "fix: b (def)" },
+    { kind: "text", text: "Full comparison: https://example.com/compare/v1...v2" },
+  ]);
+  expect(noteBlocks("")).toEqual([]);
 });
