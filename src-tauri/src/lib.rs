@@ -5,6 +5,7 @@ mod pg;
 mod secrets;
 mod session;
 mod settings;
+mod tunnel;
 
 use local::{ConnectionConfig, Folder, HistoryEntry, Placement, SavedQuery};
 use pg::{DetailItem, QueryResult, TableInfo};
@@ -16,6 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex as AsyncMutex;
+use tunnel::{KnownHosts, Tunnel};
 use tokio_postgres::Client;
 
 type CmdResult<T> = Result<T, String>;
@@ -23,13 +25,29 @@ type CmdResult<T> = Result<T, String>;
 /// Active connection and the config used to open it (the background count opens its own).
 struct Active {
     client: Arc<Client>,
+    /// What `pg::open` connects with: `origin`, with host and port pointing at the tunnel when there is one.
     config: ConnectionConfig,
+    /// The connection as saved (plus the secrets typed for this session), to rebuild the tunnel on reconnect.
+    origin: ConnectionConfig,
+    /// Kept alive for as long as the connection is active.
+    tunnel: Option<Tunnel>,
+}
+
+/// Opens the SSH tunnel if the connection asks for one, and returns the config to connect with.
+async fn route(origin: &ConnectionConfig, hosts: &KnownHosts) -> CmdResult<(Option<Tunnel>, ConnectionConfig)> {
+    if !origin.ssh_enabled {
+        return Ok((None, origin.clone()));
+    }
+    let tunnel = tunnel::open(origin, hosts).await?;
+    let config = ConnectionConfig { host: "127.0.0.1".into(), port: tunnel.local_port, ..origin.clone() };
+    Ok((Some(tunnel), config))
 }
 
 struct AppState {
     app: AppHandle,
     store: Mutex<rusqlite::Connection>,
     secrets: Secrets,
+    known_hosts: KnownHosts,
     settings: Mutex<SettingsStore>,
     session: Mutex<SessionStore>,
     active: AsyncMutex<Option<Active>>,
@@ -51,7 +69,12 @@ impl AppState {
         let mut guard = self.active.lock().await;
         let active = guard.as_mut().ok_or_else(|| "Not connected".to_string())?;
         if active.client.is_closed() {
-            active.client = Arc::new(pg::open(&active.config).await?.client);
+            // A dropped connection may mean a dropped tunnel too: build a new one.
+            active.tunnel = None;
+            let (tunnel, config) = route(&active.origin, &self.known_hosts).await?;
+            active.client = Arc::new(pg::open(&config).await?.client);
+            active.config = config;
+            active.tunnel = tunnel;
             // The new session lost open transactions, SET, temporary tables, etc.
             let _ = self.app.emit("connection-restored", ());
         }
@@ -136,24 +159,39 @@ fn reorder_folders(state: State<AppState>, ids: Vec<i64>) -> CmdResult<()> {
 #[tauri::command]
 async fn test_connection(state: State<'_, AppState>, mut config: ConnectionConfig) -> CmdResult<()> {
     // Editing a saved connection with the password left blank: test with the stored one.
-    if let (Some(id), true, true) = (config.id, config.save_password, config.password.is_empty()) {
+    if let (Some(id), true) = (config.id, config.save_password) {
         if let Ok(stored) = state.store(|db| local::get_connection(db, &state.secrets, id)) {
-            config.password = stored.password;
+            if config.password.is_empty() {
+                config.password = stored.password;
+            }
+            if config.ssh_secret.is_empty() {
+                config.ssh_secret = stored.ssh_secret;
+            }
         }
     }
+    let (_tunnel, config) = route(&config, &state.known_hosts).await?;
     pg::open(&config).await.map(drop)
 }
 
 #[tauri::command]
-async fn connect(state: State<'_, AppState>, id: i64, password: Option<String>) -> CmdResult<Vec<TableInfo>> {
+async fn connect(
+    state: State<'_, AppState>,
+    id: i64,
+    password: Option<String>,
+    ssh_secret: Option<String>,
+) -> CmdResult<Vec<TableInfo>> {
     let mut config = state.store(|db| local::get_connection(db, &state.secrets, id))?;
     if let Some(password) = password {
         config.password = password; // asked by the user for connections that do not save it
     }
-    let client = Arc::new(pg::open(&config).await?.client);
+    if let Some(secret) = ssh_secret {
+        config.ssh_secret = secret;
+    }
+    let (tunnel, routed) = route(&config, &state.known_hosts).await?;
+    let client = Arc::new(pg::open(&routed).await?.client);
     let tables = pg::list_tables(&client).await?;
     state.cancel_counting().await;
-    *state.active.lock().await = Some(Active { client, config });
+    *state.active.lock().await = Some(Active { client, config: routed, origin: config, tunnel });
     Ok(tables)
 }
 
@@ -288,7 +326,7 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let store = local::open(&dir.join("pg-studio.sqlite"))?;
-            app.manage(AppState { app: app.handle().clone(), store: Mutex::new(store), secrets: Secrets::load(dir.join("vault.json")), settings: Mutex::new(SettingsStore::load(dir.join("settings.json"))), session: Mutex::new(SessionStore::load(dir.join("session.json"))), active: AsyncMutex::new(None), counting: AsyncMutex::new(None) });
+            app.manage(AppState { app: app.handle().clone(), store: Mutex::new(store), secrets: Secrets::load(dir.join("vault.json")), known_hosts: KnownHosts::load(dir.join("known_hosts.json")), settings: Mutex::new(SettingsStore::load(dir.join("settings.json"))), session: Mutex::new(SessionStore::load(dir.join("session.json"))), active: AsyncMutex::new(None), counting: AsyncMutex::new(None) });
             // Passwords left in SQLite by older versions move to the keychain (or stay until the vault is unlocked).
             let state = app.state::<AppState>();
             let _ = state.store(|db| local::migrate_passwords(db, &state.secrets));

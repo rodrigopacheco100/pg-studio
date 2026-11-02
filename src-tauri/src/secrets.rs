@@ -20,16 +20,16 @@ mod keychain {
     fn entry(name: &str) -> Result<keyring::Entry, String> {
         keyring::Entry::new(super::KEYRING_SERVICE, name).map_err(|e| e.to_string())
     }
-    pub fn get(id: i64) -> Option<String> {
-        entry(&format!("connection-{id}")).ok()?.get_password().ok()
+    pub fn get(key: &str) -> Option<String> {
+        entry(key).ok()?.get_password().ok()
     }
-    pub fn set(id: i64, password: &str) -> Result<(), String> {
-        entry(&format!("connection-{id}"))?
+    pub fn set(key: &str, password: &str) -> Result<(), String> {
+        entry(key)?
             .set_password(password)
             .map_err(|e| format!("Could not store the password in the system keychain: {e}"))
     }
-    pub fn remove(id: i64) {
-        if let Ok(e) = entry(&format!("connection-{id}")) {
+    pub fn remove(key: &str) {
+        if let Ok(e) = entry(key) {
             let _ = e.delete_credential();
         }
     }
@@ -43,9 +43,9 @@ mod keychain {
 }
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
 mod keychain {
-    pub fn get(_: i64) -> Option<String> { None }
-    pub fn set(_: i64, _: &str) -> Result<(), String> { Err("No system keychain on this platform".into()) }
-    pub fn remove(_: i64) {}
+    pub fn get(_: &str) -> Option<String> { None }
+    pub fn set(_: &str, _: &str) -> Result<(), String> { Err("No system keychain on this platform".into()) }
+    pub fn remove(_: &str) {}
     pub fn probe() -> Result<(), String> { Err("No system keychain on this platform".into()) }
 }
 
@@ -54,7 +54,7 @@ pub struct VaultFile {
     /// Base64 salt of the key derivation; empty = vault not created yet.
     salt: String,
     check: String,
-    /// Connection id -> base64(nonce || ciphertext).
+    /// Secret name (e.g. `connection-3`) -> base64(nonce || ciphertext).
     entries: BTreeMap<String, String>,
 }
 
@@ -94,33 +94,33 @@ impl Secrets {
         Status { keychain_problem: self.keychain_problem(), vault }
     }
 
-    pub fn get(&self, id: i64) -> Option<String> {
+    pub fn get(&self, name: &str) -> Option<String> {
         if self.keychain_problem().is_none() {
-            return keychain::get(id);
+            return keychain::get(name);
         }
         let key = (*self.key.lock().unwrap())?;
-        let blob = self.file.lock().unwrap().get().entries.get(&id.to_string())?.clone();
+        let blob = self.file.lock().unwrap().get().entries.get(name)?.clone();
         decrypt(&key, &blob).and_then(|b| String::from_utf8(b).ok())
     }
 
-    pub fn set(&self, id: i64, password: &str) -> Result<(), String> {
+    pub fn set(&self, name: &str, password: &str) -> Result<(), String> {
         if self.keychain_problem().is_none() {
-            return keychain::set(id, password);
+            return keychain::set(name, password);
         }
         let key = (*self.key.lock().unwrap()).ok_or("The password vault is locked")?;
         let mut file = self.file.lock().unwrap();
         let mut value = file.get();
-        value.entries.insert(id.to_string(), encrypt(&key, password.as_bytes())?);
+        value.entries.insert(name.to_string(), encrypt(&key, password.as_bytes())?);
         file.set(value)
     }
 
-    pub fn remove(&self, id: i64) {
+    pub fn remove(&self, name: &str) {
         if self.keychain_problem().is_none() {
-            keychain::remove(id);
+            keychain::remove(name);
         }
         let mut file = self.file.lock().unwrap();
         let mut value = file.get();
-        if value.entries.remove(&id.to_string()).is_some() {
+        if value.entries.remove(name).is_some() {
             let _ = file.set(value);
         }
     }
