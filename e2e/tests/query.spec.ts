@@ -78,3 +78,16 @@ test("a backslash-escaped quote in an E'...' string does not split the statement
   await expect(studio.dialog("Run destructive statements?")).toBeHidden();
   await expect(studio.cells.filter({ hasText: "it's; delete from users" })).toBeVisible();
 });
+
+test("Stop cancels a running query and the connection stays usable", async ({ studio }) => {
+  await studio.newConnection({ name: "q" });
+  await studio.connect("q");
+
+  await studio.run("select pg_sleep(60)");
+  await studio.page.getByRole("button", { name: "Stop" }).click();
+  await expect(studio.page.getByText(/canceling statement due to user request/)).toBeVisible();
+  await expect(studio.page.getByRole("button", { name: "Run" })).toBeVisible();
+
+  await studio.run("select 1 as still_here");
+  await expect(studio.page.getByRole("columnheader", { name: "still_here" })).toBeVisible();
+});

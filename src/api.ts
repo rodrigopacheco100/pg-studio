@@ -30,6 +30,8 @@ export const api = {
 
   /** `statements` are the individual statements of `sql`; the backend uses them to learn the column types. */
   runQuery: (sql: string, statements: string[]) => invoke<QueryOutput>("run_query", { sql, statements }),
+  /** Interrupts the running query; it then fails with the server's "canceling statement" error. */
+  cancelQuery: () => invoke<void>("cancel_query"),
   tableData: (schema: string, table: string, limit: number, offset: number, view: GridQuery) =>
     invoke<QueryResult>("table_data", { schema, table, limit, offset, view }),
 

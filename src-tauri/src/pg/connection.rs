@@ -3,12 +3,13 @@
 use super::error::error_text;
 use crate::storage::connections::ConnectionConfig;
 use postgres_native_tls::MakeTlsConnector;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio_postgres::{CancelToken, Client, Config, NoTls};
 
 /// Connection with the token that allows cancelling the running query.
 pub struct Session {
-    pub client: Client,
+    pub client: Arc<Client>,
     token: CancelToken,
     tls: Option<MakeTlsConnector>,
 }
@@ -55,12 +56,12 @@ pub async fn open(c: &ConnectionConfig) -> Result<Session, String> {
         tauri::async_runtime::spawn(async move {
             let _ = conn.await;
         });
-        Ok(Session { token: client.cancel_token(), client, tls: Some(tls) })
+        Ok(Session { token: client.cancel_token(), client: Arc::new(client), tls: Some(tls) })
     } else {
         let (client, conn) = cfg.connect(NoTls).await.map_err(|e| error_text(&e, None))?;
         tauri::async_runtime::spawn(async move {
             let _ = conn.await;
         });
-        Ok(Session { token: client.cancel_token(), client, tls: None })
+        Ok(Session { token: client.cancel_token(), client: Arc::new(client), tls: None })
     }
 }

@@ -55,6 +55,7 @@ pub fn configure<R: Runtime>(builder: Builder<R>, data_dir: Option<PathBuf>) -> 
             vault::vault_open,
             queries::refresh_tables,
             queries::run_query,
+            queries::cancel_query,
             queries::table_data,
             queries::table_count,
             queries::table_details,

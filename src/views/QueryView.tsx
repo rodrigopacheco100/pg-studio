@@ -1,4 +1,4 @@
-import { AlignLeft, FileText, FolderOpen, Play, Plus, Save, SaveAll, X } from "lucide-react";
+import { AlignLeft, FileText, FolderOpen, Play, Plus, Save, SaveAll, Square, X } from "lucide-react";
 import { useEffect, useImperativeHandle, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -123,7 +123,11 @@ export function QueryView({ ref, documents, tables, results, visible }: Props) {
           <Button variant="ghost" size="icon-xs" className="my-1" title="Open file (Ctrl+O)" onClick={() => void open()}><FolderOpen /></Button>
         </div>
         <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
-          <Button size="sm" onClick={() => run(editor()?.getRunText() ?? "")}><Play /> Run</Button>
+          {results.outcome?.kind === "running" ? (
+            <Button size="sm" variant="destructive" onClick={() => void api.cancelQuery()} title="Cancel the running query"><Square /> Stop</Button>
+          ) : (
+            <Button size="sm" onClick={() => run(editor()?.getRunText() ?? "")}><Play /> Run</Button>
+          )}
           <Button size="sm" variant="outline" onClick={() => editor()?.format()} title="Format the SQL in this tab (Ctrl+Shift+F)"><AlignLeft /> Beautify</Button>
           <Button size="sm" variant="outline" onClick={() => void save(active.id)} title="Save file (Ctrl+S)"><SaveAll /> Save file</Button>
           <Button size="sm" variant="outline" onClick={saveQuery} title="Keep this query in the Saved tab"><Save /> Save query</Button>

@@ -20,7 +20,8 @@ pub type Notifier = Box<dyn Fn(&str) + Send + Sync>;
 
 /// Active connection and the config used to open it (the background count opens its own).
 pub struct Active {
-    client: Arc<Client>,
+    /// The connection with the means to cancel its running query.
+    session: Arc<pg::Session>,
     /// What `pg::open` connects with: `origin`, with host and port pointing at the tunnel when there is one.
     config: ConnectionConfig,
     /// The connection as saved (plus the secrets typed for this session), to rebuild the tunnel on reconnect.
@@ -95,7 +96,7 @@ impl AppState {
     /// Applies the current `statement_timeout` setting to the active connection (after the setting changed).
     pub async fn apply_statement_timeout(&self) -> CmdResult<()> {
         let client = match self.active.lock().await.as_ref() {
-            Some(active) => active.client.clone(),
+            Some(active) => active.session.client.clone(),
             None => return Ok(()),
         };
         pg::set_statement_timeout(&client, self.statement_timeout_seconds()).await
@@ -126,11 +127,19 @@ impl AppState {
     /// Connects and makes it the active connection (replacing any previous one).
     pub async fn connect(&self, origin: ConnectionConfig) -> CmdResult<Vec<pg::TableInfo>> {
         let (tunnel, config) = self.route(&origin).await?;
-        let client = Arc::new(self.open_session(&config).await?.client);
-        let tables = pg::list_tables(&client).await?;
+        let session = Arc::new(self.open_session(&config).await?);
+        let tables = pg::list_tables(&session.client).await?;
         self.cancel_counting().await;
-        *self.active.lock().await = Some(Active { client, config, origin, _tunnel: tunnel });
+        *self.active.lock().await = Some(Active { session, config, origin, _tunnel: tunnel });
         Ok(tables)
+    }
+
+    /// Asks the server to interrupt the query running on the main connection (no-op if there is none).
+    pub async fn cancel_query(&self) {
+        let session = self.active.lock().await.as_ref().map(|a| a.session.clone());
+        if let Some(session) = session {
+            session.cancel().await;
+        }
     }
 
     pub async fn disconnect(&self) {
@@ -154,17 +163,17 @@ impl AppState {
     pub async fn client(&self) -> CmdResult<Arc<Client>> {
         let mut guard = self.active.lock().await;
         let active = guard.as_mut().ok_or_else(|| "Not connected".to_string())?;
-        if active.client.is_closed() {
+        if active.session.client.is_closed() {
             // A dropped connection may mean a dropped tunnel too: build a new one.
             active._tunnel = None;
             let (tunnel, config) = self.route(&active.origin).await?;
-            active.client = Arc::new(self.open_session(&config).await?.client);
+            active.session = Arc::new(self.open_session(&config).await?);
             active.config = config;
             active._tunnel = tunnel;
             // The new session lost open transactions, SET, temporary tables, etc.
             (self.notify)("connection-restored");
         }
-        Ok(active.client.clone())
+        Ok(active.session.client.clone())
     }
 
     /// Counts rows on a connection of its own: the server handles one query at a time per connection, so

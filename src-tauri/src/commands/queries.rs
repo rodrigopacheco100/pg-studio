@@ -31,6 +31,13 @@ pub async fn run_query(state: State<'_, AppState>, sql: String, statements: Vec<
     Ok(QueryOutput { results: outcome?, duration_ms })
 }
 
+/// Interrupts the query running on the active connection; the pending `run_query` / `table_data` fails with the server's "canceling statement" error.
+#[tauri::command]
+pub async fn cancel_query(state: State<'_, AppState>) -> CmdResult<()> {
+    state.cancel_query().await;
+    Ok(())
+}
+
 #[tauri::command]
 pub async fn table_data(
     state: State<'_, AppState>,
