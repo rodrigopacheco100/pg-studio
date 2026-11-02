@@ -68,3 +68,13 @@ test("asks before a data-modifying CTE without WHERE and before ALTER ... DROP",
   await studio.run(`alter table ${table} alter column extra drop not null`);
   await expect(confirm).toBeHidden();
 });
+
+test("a backslash-escaped quote in an E'...' string does not split the statement", async ({ studio }) => {
+  await studio.newConnection({ name: "q" });
+  await studio.connect("q");
+
+  // Split at the `;` inside the string, the tail would look like `delete from users` and ask for confirmation.
+  await studio.run(String.raw`select E'it\'s; delete from users' as v`);
+  await expect(studio.dialog("Run destructive statements?")).toBeHidden();
+  await expect(studio.cells.filter({ hasText: "it's; delete from users" })).toBeVisible();
+});

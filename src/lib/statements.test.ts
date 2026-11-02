@@ -31,3 +31,19 @@ test("statementAtCursor picks the statement at the cursor, including multiline",
   expect(statementAtCursor(doc, doc.length)).toBe("select 3");
   expect(statementAtCursor("  ", 1)).toBe("");
 });
+
+test("a backslash escapes the quote inside an E'...' string", () => {
+  const sql = String.raw`select E'it\'s; not a split'; select 2`;
+  expect(splitStatements(sql).map((r) => sql.slice(r.from, r.to))).toEqual([String.raw`select E'it\'s; not a split'`, "select 2"]);
+  expect(splitStatements(String.raw`select E'a\\'; select 2`)).toHaveLength(2); // an escaped backslash does not escape the quote
+});
+
+test("a backslash means nothing in a plain string", () => {
+  const sql = String.raw`select 'a\'; select 2`;
+  expect(splitStatements(sql).map((r) => sql.slice(r.from, r.to))).toEqual([String.raw`select 'a\'`, "select 2"]);
+});
+
+test("only a lone E prefixes an escape string", () => {
+  const sql = String.raw`select name'x\'; select 2`; // `name'` is not E'...'
+  expect(splitStatements(sql)).toHaveLength(2);
+});

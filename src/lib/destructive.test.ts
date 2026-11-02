@@ -63,3 +63,8 @@ test("ALTER ... DROP loses data, except for DEFAULT / NOT NULL", () => {
 test("ALTER with several actions flags the one that drops", () => {
   expect(reasons("alter table t alter column a drop default, drop column b")).toEqual(["ALTER ... DROP"]);
 });
+
+test("a statement keyword inside an E'...' string with an escaped quote is not a statement", () => {
+  expect(reasons(String.raw`select E'it\'s; delete from t'`)).toEqual([]);
+  expect(reasons(String.raw`select E'\'' ; delete from t`)).toEqual(["DELETE without WHERE"]);
+});

@@ -1,4 +1,4 @@
-import { splitStatements } from "./statements";
+import { skipQuoted, splitStatements } from "./statements";
 
 export interface Destructive {
   /** What makes it risky, e.g. `DELETE without WHERE`. */
@@ -27,9 +27,7 @@ function words(sql: string): Word[] {
       const end = sql.indexOf("*/", i + 2);
       i = end === -1 ? sql.length : end + 2;
     } else if (c === "'" || c === '"') {
-      i++;
-      while (i < sql.length && !(sql[i] === c && sql[i + 1] !== c)) i += sql[i] === c ? 2 : 1;
-      i++;
+      i = skipQuoted(sql, i);
     } else if (c === "$" && /^\$(?:[A-Za-z_]\w*)?\$/.test(sql.slice(i, i + 64))) {
       const tag = /^\$(?:[A-Za-z_]\w*)?\$/.exec(sql.slice(i, i + 64))![0];
       const end = sql.indexOf(tag, i + tag.length);

@@ -5,6 +5,24 @@ export interface StatementRange {
   to: number;
 }
 
+/**
+ * Index just after the quoted string or identifier that opens at `sql[i]` (`'` or `"`); doubled quotes are an
+ * escape. In an escape string (`E'...'`) a backslash also escapes the next character, so `E'it\'s'` is one string.
+ */
+export function skipQuoted(sql: string, i: number): number {
+  const q = sql[i];
+  const escapes = q === "'" && /^[eE]$/.test(sql[i - 1] ?? "") && !/\w/.test(sql[i - 2] ?? "");
+  i++;
+  while (i < sql.length) {
+    if (escapes && sql[i] === "\\") i += 2;
+    else if (sql[i] === q) {
+      if (sql[i + 1] !== q) return i + 1;
+      i += 2;
+    } else i++;
+  }
+  return sql.length;
+}
+
 function trimEnd(doc: string, end: number) {
   while (/\s/.test(doc[end - 1])) end--;
   return end;
@@ -12,7 +30,7 @@ function trimEnd(doc: string, end: number) {
 
 /**
  * Statements of a script, separated by `;` outside strings, quoted identifiers,
- * comments (`--`, `/* *​/`) and `$tag$…$tag$` blocks. Comment-only chunks do not count.
+ * comments (`--`, `/* *​/`) and `$tag$…$tag$` blocks (backslash escapes in `E'...'` included). Comment-only chunks do not count.
  */
 export function splitStatements(doc: string): StatementRange[] {
   const out: StatementRange[] = [];
@@ -36,12 +54,8 @@ export function splitStatements(doc: string): StatementRange[] {
       i++;
     } else {
       if (from === -1) from = i;
-      if (c === "'" || c === '"') {
-        i++;
-        // Doubled quotes inside the literal are an escape, not a closing quote.
-        while (i < doc.length && !(doc[i] === c && doc[i + 1] !== c)) i += doc[i] === c ? 2 : 1;
-        i++;
-      } else if (c === "$") {
+      if (c === "'" || c === '"') i = skipQuoted(doc, i);
+      else if (c === "$") {
         const tag = /^\$(?:[A-Za-z_]\w*)?\$/.exec(doc.slice(i, i + 64))?.[0];
         if (tag) {
           const end = doc.indexOf(tag, i + tag.length);
