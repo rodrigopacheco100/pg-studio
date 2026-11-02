@@ -1,4 +1,4 @@
-/** Palavras que não podem ser identificadores sem aspas nem apelidos de tabela. */
+/** Words that cannot be unquoted identifiers or table aliases. */
 export const RESERVED = new Set(
   `all analyse analyze and any array as asc both case cast check collate column constraint create cross
    current_date current_time current_timestamp current_user default delete desc distinct do else end except
@@ -8,7 +8,7 @@ export const RESERVED = new Set(
    values variadic verbose when where window with alter drop lateral`.split(/\s+/),
 );
 
-/** Coloca aspas quando o identificador não é válido sem elas (maiúsculas, símbolos, palavra reservada). */
+/** Quotes the identifier when it is not valid without quotes (uppercase, symbols, reserved word). */
 export function quoteIdent(name: string): string {
   return /^[a-z_][a-z0-9_$]*$/.test(name) && !RESERVED.has(name) ? name : `"${name.replace(/"/g, '""')}"`;
 }

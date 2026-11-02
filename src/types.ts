@@ -51,19 +51,19 @@ export interface SavedQuery {
   sql: string;
 }
 
-/** Resumo da última execução (query ou página de tabela), exibido no rodapé. */
+/** Summary of the last execution (query or table page), shown in the footer. */
 export interface RunInfo {
   label: string;
   status: "running" | "ok" | "error";
   durationMs?: number;
   rows?: number;
   statements?: number;
-  /** Linhas afetadas, quando a última instrução não retorna colunas. */
+  /** Affected rows, when the last statement returns no columns. */
   affected?: number;
   message?: string;
 }
 
-/** Espelha `Settings` em src-tauri/src/settings.rs (camelCase). */
+/** Mirrors `Settings` in src-tauri/src/settings.rs (camelCase). */
 export interface Settings {
   sidebarWidth: number;
   editorHeight: number;

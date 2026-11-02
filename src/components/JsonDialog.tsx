@@ -18,8 +18,8 @@ export function JsonDialog({ title, json, onCopy, onClose }: Props) {
         </DialogHeader>
         <pre className="selectable max-h-[60vh] overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-xs">{json}</pre>
         <DialogFooter>
-          <Button variant="outline" onClick={onCopy}><Copy /> Copiar</Button>
-          <Button onClick={onClose}>Fechar</Button>
+          <Button variant="outline" onClick={onCopy}><Copy /> Copy</Button>
+          <Button onClick={onClose}>Close</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

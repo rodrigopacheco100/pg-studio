@@ -128,7 +128,7 @@
     @apply font-sans;
     }
 }
-/* Nada é selecionável por padrão; só onde copiar/editar texto faz sentido. */
+/* Nothing is selectable by default; only where copying/editing text makes sense. */
 @layer base {
   html {
     color-scheme: dark; /* barras de rolagem e controles nativos escuros */

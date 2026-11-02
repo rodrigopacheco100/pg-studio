@@ -9,13 +9,13 @@ export type Outcome =
   | { kind: "ok"; results: QueryResult[] }
   | { kind: "error"; message: string };
 
-/** O que o painel de resultados está mostrando. A página de uma query é fatiada no cliente. */
+/** What the results pane is showing. A query's page is sliced on the client. */
 export type Source = { kind: "query"; page: number } | { kind: "table"; table: TableRef; page: number };
 
-/** Paginação do que está na tela; `total` ignora a página atual. */
+/** Pagination of what is on screen; `total` ignores the current page. */
 export interface Paging {
   page: number;
-  /** Total de registros; `null` enquanto a contagem em segundo plano não termina (ou se falhou). */
+  /** Total records; `null` while the background count has not finished (or if it failed). */
   total: number | null;
   pageCount: number | null;
   hasNext: boolean;
@@ -24,8 +24,8 @@ export interface Paging {
 const tableKey = (t: TableRef) => `${t.schema}.${t.name}`;
 
 /**
- * Estado único do painel de resultados, compartilhado por queries e tabelas abertas.
- * Só a última requisição vale: respostas atrasadas de requisições antigas são descartadas.
+ * Single state of the results pane, shared by queries and opened tables.
+ * Only the latest request counts: late responses from older requests are discarded.
  */
 export function useResults() {
   const [outcome, setOutcome] = useState<Outcome | null>(null);
@@ -60,12 +60,12 @@ export function useResults() {
       if (id !== current.current) return;
       const message = errText(e);
       setOutcome({ kind: "error", message });
-      // O servidor não devolve a duração de uma query que falhou; usa o tempo medido aqui.
+      // The server does not return the duration of a failed query; uses the time measured here.
       setInfo({ label, status: "error", durationMs: Math.round(performance.now() - started), message });
     }
   }, []);
 
-  /** Conta em segundo plano: a página aparece sem esperar o total. */
+  /** Counts in the background: the page appears without waiting for the total. */
   const countInBackground = useCallback((table: TableRef) => {
     const seq = ++countSeq.current;
     countedTable.current = tableKey(table);
@@ -73,17 +73,17 @@ export function useResults() {
     api
       .tableCount(table.schema, table.name)
       .then((n) => seq === countSeq.current && setTableTotal(n))
-      .catch(() => {}); // sem total (ex.: sem permissão ou cancelada): a paginação segue sem a contagem
+      .catch(() => {}); // no total (e.g. no permission or cancelled): pagination goes on without the count
   }, []);
 
   const openTable = useCallback(
     async (table: TableRef, page = 0) => {
       const id = ++current.current;
-      const label = `${tableKey(table)} · página ${page + 1}`;
+      const label = `${tableKey(table)} · page ${page + 1}`;
       setSource({ kind: "table", table, page });
       setOutcome({ kind: "running" });
       setInfo({ label, status: "running" });
-      // Reabrir a mesma tabela na página 0 recalcula o total; trocar de página reaproveita.
+      // Reopening the same table on page 0 recomputes the total; changing page reuses it.
       if (page === 0 || countedTable.current !== tableKey(table)) countInBackground(table);
       const started = performance.now();
       const elapsed = () => Math.round(performance.now() - started);

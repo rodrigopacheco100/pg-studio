@@ -1,4 +1,4 @@
-//! Armazenamento local (SQLite): conexões salvas, histórico e queries salvas.
+//! Local storage (SQLite): saved connections, history and saved queries.
 
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};

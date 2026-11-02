@@ -35,7 +35,7 @@ const toConn = (d: Draft): Conn => ({
 });
 
 interface Props {
-  /** Conexão em edição; `null` cria uma nova. */
+  /** Connection being edited; `null` creates a new one. */
   initial: Conn | null;
   onClose: () => void;
   onSaved: () => void;
@@ -57,17 +57,17 @@ export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
     try {
       const c = parseConnUrl(url);
       setDraft((d) => ({ ...d, ...c, port: String(c.port), name: d.name || `${c.host}/${c.database}` }));
-      setMsg({ text: "URL importada", kind: "ok" });
+      setMsg({ text: "URL imported", kind: "ok" });
     } catch (e) {
-      setMsg({ text: e instanceof Error ? e.message : "URL inválida", kind: "error" });
+      setMsg({ text: e instanceof Error ? e.message : "Invalid URL", kind: "error" });
     }
   }
 
   async function test() {
-    setMsg({ text: "Testando…", kind: "" });
+    setMsg({ text: "Testing…", kind: "" });
     try {
       await api.testConnection(toConn(draft));
-      setMsg({ text: "Conexão OK", kind: "ok" });
+      setMsg({ text: "Connection OK", kind: "ok" });
     } catch (e) {
       setMsg({ text: errText(e), kind: "error" });
     }
@@ -94,30 +94,30 @@ export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Conexão PostgreSQL</DialogTitle>
+          <DialogTitle>PostgreSQL connection</DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-3">
           <div className="grid gap-1.5">
-            <Label htmlFor="conn-url">Importar de URL</Label>
+            <Label htmlFor="conn-url">Import from URL</Label>
             <div className="flex gap-2">
               <Input
                 id="conn-url"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
-                placeholder="postgres://user:senha@host:5432/banco"
+                placeholder="postgres://user:password@host:5432/database"
               />
               <Button type="button" variant="outline" onClick={importUrl}>Importar</Button>
             </div>
           </div>
-          {field("name", "Nome", { required: true })}
+          {field("name", "Name", { required: true })}
           <div className="grid grid-cols-[1fr_6rem] gap-3">
             {field("host", "Host", { required: true })}
-            {field("port", "Porta", { type: "number", required: true })}
+            {field("port", "Port", { type: "number", required: true })}
           </div>
-          {field("database", "Banco", { required: true })}
+          {field("database", "Database", { required: true })}
           <div className="grid grid-cols-2 gap-3">
-            {field("user", "Usuário", { required: true })}
-            {field("password", "Senha", { type: "password" })}
+            {field("user", "User", { required: true })}
+            {field("password", "Password", { type: "password" })}
           </div>
           <Label className="gap-2 font-normal">
             <Checkbox checked={draft.ssl} onCheckedChange={(v) => set("ssl", v === true)} />
@@ -127,9 +127,9 @@ export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
             {msg.text}
           </p>
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={test}>Testar</Button>
-            <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
-            <Button type="submit">Salvar</Button>
+            <Button type="button" variant="outline" onClick={test}>Test</Button>
+            <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button type="submit">Save</Button>
           </DialogFooter>
         </form>
       </DialogContent>

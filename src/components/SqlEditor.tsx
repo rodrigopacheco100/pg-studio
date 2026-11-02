@@ -12,7 +12,7 @@ import { createSqlCompletion } from "../lib/sqlComplete";
 import type { TableInfo } from "../types";
 
 export interface SqlEditorHandle {
-  /** A seleção, ou o texto inteiro se nada estiver selecionado. */
+  /** The selection, or the whole text if nothing is selected. */
   getRunText: () => string;
 }
 
@@ -21,11 +21,11 @@ interface Props {
   value: string;
   tables: TableInfo[];
   onChange: (value: string) => void;
-  /** Executa `sql`: o texto da seleção/documento (Ctrl+Enter) ou uma instrução (botão ▶). */
+  /** Runs `sql`: the selection/document text (Ctrl+Enter) or a single statement (▶ button). */
   onRun: (sql: string) => void;
 }
 
-/** Usa as variáveis de cor do shadcn; o `oneDark` fornece o realce de sintaxe. */
+/** Uses shadcn's color variables; `oneDark` provides the syntax highlighting. */
 const theme = EditorView.theme({
   "&": { height: "100%", backgroundColor: "var(--background)", color: "var(--foreground)" },
   "&.cm-focused": { outline: "none" },
@@ -53,7 +53,7 @@ function getRunText(v: EditorView) {
 export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
-  // Os callbacks e as tabelas mudam sem recriar o editor.
+  // Callbacks and tables change without recreating the editor.
   const latest = useRef({ onChange, onRun, tables });
   latest.current = { onChange, onRun, tables };
 
@@ -89,10 +89,10 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
     });
     view.current = v;
     return () => v.destroy();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- o editor é criado uma vez; `value` é sincronizado abaixo
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the editor is created once; `value` is synced below
   }, []);
 
-  // Mudanças externas (ex.: usar uma query do histórico).
+  // External changes (e.g. using a query from the history).
   useEffect(() => {
     const v = view.current;
     if (v && v.state.doc.toString() !== value) {

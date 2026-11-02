@@ -11,10 +11,10 @@ import {
 import type { QueryResult, TableRef } from "../types";
 import { JsonDialog } from "./JsonDialog";
 
-const EDGE = 28; // distância da borda que ativa o autoscroll durante o arraste
+const EDGE = 28; // distance from the edge that triggers autoscroll while dragging
 const STEP = 24;
 
-/** O arraste começou numa célula, no número de uma linha ou no cabeçalho de uma coluna. */
+/** The drag started on a cell, on a row number or on a column header. */
 type Mode = "cell" | "row" | "col";
 interface Drag {
   mode: Mode;
@@ -24,20 +24,20 @@ interface Drag {
 type MenuItem = { separator: true } | { label: string; onSelect: () => void };
 
 interface MenuState {
-  /** Célula sob o cursor. */
+  /** Cell under the cursor. */
   cell: Cell;
-  /** Linhas e colunas alvo das ações (a seleção, ou só a célula clicada). */
+  /** Target rows and columns of the actions (the selection, or just the clicked cell). */
   rows: number[];
   cols: number[];
 }
 
 interface Props {
   result: QueryResult;
-  /** Quando o resultado é o conteúdo de uma tabela, habilita "Copiar como INSERT". */
+  /** When the result is the contents of a table, enables "Copy as INSERT". */
   table?: TableRef;
 }
 
-/** Lê a posição (linha/coluna) de um elemento da grade; indefinida fora dela. */
+/** Reads the position (row/column) of a grid element; undefined outside it. */
 function locate(root: HTMLElement | null, el: Element | null) {
   const inside = (e: HTMLElement | null | undefined) => (e && root?.contains(e) ? e : undefined);
   const r = inside(el?.closest<HTMLElement>("[data-r]"))?.dataset.r;
@@ -48,12 +48,12 @@ function locate(root: HTMLElement | null, el: Element | null) {
 interface GridRowProps {
   row: Row;
   r: number;
-  /** Faixas de colunas selecionadas nesta linha ("0-2,5-5"); vazio se nenhuma. */
+  /** Selected column ranges in this row ("0-2,5-5"); empty if none. */
   sig: string;
   fullRow: boolean;
 }
 
-/** Memoizada: arrastar a seleção só renderiza de novo as linhas cuja seleção mudou. */
+/** Memoized: dragging the selection only re-renders the rows whose selection changed. */
 const GridRow = memo(function GridRow({ row, r, sig, fullRow }: GridRowProps) {
   const segs = sig ? sig.split(",").map((s) => s.split("-").map(Number)) : [];
   const isSel = (c: number) => segs.some(([a, b]) => c >= a && c <= b);
@@ -87,7 +87,7 @@ const GridRow = memo(function GridRow({ row, r, sig, fullRow }: GridRowProps) {
   );
 });
 
-/** Visualizador de resultados único: seleção por célula/linha/coluna, arraste e menu de contexto. */
+/** Single results viewer: cell/row/column selection, drag and context menu. */
 export function ResultViewer({ result, table }: Props) {
   const [ranges, setRanges] = useState<Range[]>([]);
   const [menu, setMenu] = useState<MenuState | null>(null);
@@ -119,13 +119,13 @@ export function ResultViewer({ result, table }: Props) {
     return cellRange(from, to);
   };
 
-  // Arraste: acompanha o mouse pela janela toda e rola a área de resultados perto das bordas.
+  // Drag: follows the mouse across the whole window and scrolls the results area near the edges.
   useEffect(() => {
     function apply() {
       const d = drag.current;
       if (!d) return;
       const { r, c } = locate(root.current, document.elementFromPoint(pointer.current.x, pointer.current.y));
-      // Sobre o cabeçalho (sem linha) ou o número da linha (sem coluna) só vale o que o modo precisa.
+      // Over the header (no row) or the row number (no column) only what the mode needs counts.
       let pos: Cell;
       if (d.mode === "cell") {
         if (r === undefined) return;
@@ -173,9 +173,9 @@ export function ResultViewer({ result, table }: Props) {
   async function copy(text: string, what: string) {
     try {
       await navigator.clipboard.writeText(text);
-      setNotice(`${what} copiado`);
+      setNotice(`${what} copied`);
     } catch {
-      setNotice("Não foi possível copiar");
+      setNotice("Could not copy");
     }
     window.clearTimeout(noticeTimer.current);
     noticeTimer.current = window.setTimeout(() => setNotice(""), 2000);
@@ -200,7 +200,7 @@ export function ResultViewer({ result, table }: Props) {
     else if (c !== undefined) [mode, pos] = ["col", { r: 0, c }];
     else return;
 
-    e.preventDefault(); // sem seleção nativa de texto nem arraste do navegador
+    e.preventDefault(); // no native text selection or browser drag
     root.current?.focus();
     pointer.current = { x: e.clientX, y: e.clientY };
 
@@ -211,7 +211,7 @@ export function ResultViewer({ result, table }: Props) {
     drag.current = { mode, anchor: from };
   }
 
-  // O Radix abre o menu na posição do cursor; aqui só se decide a seleção e o alvo das ações.
+  // Radix opens the menu at the cursor position; here we only decide the selection and the action target.
   function onContextMenu(e: React.MouseEvent) {
     if (shown === 0) {
       e.preventDefault();
@@ -226,10 +226,10 @@ export function ResultViewer({ result, table }: Props) {
       anchor.current = cell;
     };
     if (r === undefined && c === undefined) {
-      cell = { r: 0, c: 0 }; // canto da grade: tudo
+      cell = { r: 0, c: 0 }; // grid corner: everything
       select(cellRange(cell, { r: lastRow, c: lastCol }));
     } else if (r === undefined) {
-      cell = { r: 0, c: c! }; // cabeçalho: a coluna
+      cell = { r: 0, c: c! }; // header: the column
       if (!fullCols.has(c!)) select(colRange(c!, c!, lastRow));
     } else {
       cell = { r, c: c ?? 0 };
@@ -242,7 +242,7 @@ export function ResultViewer({ result, table }: Props) {
   const selRows = useMemo(() => rowsOf(ranges), [ranges]);
   const selCols = useMemo(() => colsOf(ranges), [ranges]);
 
-  /** Dados exportáveis: as linhas e colunas atravessadas pela seleção. */
+  /** Exportable data: the rows and columns crossed by the selection. */
   function project(rows: number[], cols: number[]) {
     return {
       names: cols.map((c) => result.columns[c]),
@@ -251,7 +251,7 @@ export function ResultViewer({ result, table }: Props) {
   }
 
   function onKeyDown(e: React.KeyboardEvent) {
-    if (e.target !== e.currentTarget) return; // teclas de menus e diálogos não são da grade
+    if (e.target !== e.currentTarget) return; // keys from menus and dialogs do not belong to the grid
     const mod = e.ctrlKey || e.metaKey;
     if (mod && e.key === "a") {
       e.preventDefault();
@@ -259,7 +259,7 @@ export function ResultViewer({ result, table }: Props) {
     } else if (mod && e.key === "c" && selRows.length > 0) {
       e.preventDefault();
       const { names, data } = project(selRows, selCols);
-      void copy(toTsv(names, data, false), "Seleção");
+      void copy(toTsv(names, data, false), "Selection");
     } else if (e.key === "Escape") {
       setRanges([]);
     }
@@ -267,36 +267,36 @@ export function ResultViewer({ result, table }: Props) {
 
   function menuItems(m: MenuState): MenuItem[] {
     const { names, data } = project(m.rows, m.cols);
-    const lines = data.length === 1 ? "1 linha" : `${data.length} linhas`;
+    const lines = data.length === 1 ? "1 row" : `${data.length} rows`;
     const partial = names.length < result.columns.length;
-    const size = `${lines} × ${names.length} col.`;
+    const size = `${lines} × ${names.length} cols.`;
     const allColumns = (rows: number[]) => rows.map((r) => result.rows[r]);
     const cell = result.rows[m.cell.r]?.[m.cell.c] ?? null;
     return [
-      // Linhas inteiras, sem precisar selecionar todas as colunas.
-      { label: `Ver ${lines} como JSON`, onSelect: () => setJson(toJson(result.columns, allColumns(m.rows))) },
+      // Whole rows, without having to select all the columns.
+      { label: `View ${lines} as JSON`, onSelect: () => setJson(toJson(result.columns, allColumns(m.rows))) },
       ...(partial
-        ? [{ label: `Ver seleção (${size}) como JSON`, onSelect: () => setJson(toJson(names, data)) }]
+        ? [{ label: `View selection (${size}) as JSON`, onSelect: () => setJson(toJson(names, data)) }]
         : []),
       { separator: true },
-      { label: "Copiar como JSON", onSelect: () => copy(toJson(names, data), "JSON") },
-      { label: "Copiar como CSV", onSelect: () => copy(toCsv(names, data), "CSV") },
-      { label: "Copiar como TSV", onSelect: () => copy(toTsv(names, data), "TSV") },
+      { label: "Copy as JSON", onSelect: () => copy(toJson(names, data), "JSON") },
+      { label: "Copy as CSV", onSelect: () => copy(toCsv(names, data), "CSV") },
+      { label: "Copy as TSV", onSelect: () => copy(toTsv(names, data), "TSV") },
       ...(table
-        ? [{ label: "Copiar como INSERT", onSelect: () => copy(toInsert(table, names, data), "INSERT") }]
+        ? [{ label: "Copy as INSERT", onSelect: () => copy(toInsert(table, names, data), "INSERT") }]
         : []),
       { separator: true },
-      { label: "Copiar valor da célula", onSelect: () => copy(cell ?? "NULL", "Valor") },
+      { label: "Copy cell value", onSelect: () => copy(cell ?? "NULL", "Value") },
       {
-        label: names.length > 1 ? "Copiar nomes das colunas" : "Copiar nome da coluna",
-        onSelect: () => copy(names.join(", "), "Nome"),
+        label: names.length > 1 ? "Copy column names" : "Copy column name",
+        onSelect: () => copy(names.join(", "), "Name"),
       },
       { separator: true },
-      { label: "Selecionar tudo", onSelect: selectAll },
+      { label: "Select all", onSelect: selectAll },
     ];
   }
 
-  // Por linha: faixas de colunas selecionadas e se a linha inteira está selecionada.
+  // Per row: selected column ranges and whether the whole row is selected.
   const rowSel = useMemo(() => {
     return Array.from({ length: shown }, (_, r) => {
       const hit = ranges.filter((g) => r >= g.r1 && r <= g.r2);
@@ -316,7 +316,7 @@ export function ResultViewer({ result, table }: Props) {
   }, [ranges, lastRow]);
 
   if (result.columns.length === 0) {
-    return <div className="msg">OK — {result.affected ?? 0} linha(s) afetada(s).</div>;
+    return <div className="msg">OK — {result.affected ?? 0} row(s) affected.</div>;
   }
 
   return (
@@ -332,7 +332,7 @@ export function ResultViewer({ result, table }: Props) {
               <tr>
                 <th
                   className="corner sticky top-0 left-0 z-20 w-11 min-w-11 cursor-pointer border-r border-b bg-muted"
-                  title="Selecionar tudo"
+                  title="Select all"
                 />
                 {result.columns.map((c, i) => (
                   <th
@@ -366,10 +366,10 @@ export function ResultViewer({ result, table }: Props) {
             )}
         </ContextMenuContent>
       </ContextMenu>
-      {shown === 0 && <div className="px-3 py-2 text-sm text-muted-foreground">Nenhuma linha.</div>}
+      {shown === 0 && <div className="px-3 py-2 text-sm text-muted-foreground">No rows.</div>}
       {(selRows.length > 0 || notice) && (
         <div className="px-3 py-1.5 text-xs text-muted-foreground">
-          {selRows.length > 0 && `${selRows.length} linha(s) × ${selCols.length} coluna(s) selecionada(s)`}
+          {selRows.length > 0 && `${selRows.length} row(s) × ${selCols.length} column(s) selected`}
           {notice && <strong className="font-medium text-primary">{selRows.length > 0 ? " · " : ""}{notice}</strong>}
         </div>
       )}

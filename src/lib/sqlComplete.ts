@@ -9,12 +9,12 @@ const KEYWORDS = `SELECT FROM WHERE JOIN LEFT RIGHT INNER OUTER FULL CROSS ON US
   COALESCE CAST EXPLAIN ANALYZE TRUE FALSE`.split(/\s+/);
 
 export interface StatementRef {
-  /** Apelido declarado na query, se houver. */
+  /** Alias declared in the query, if any. */
   alias: string | null;
   table: TableInfo;
 }
 
-/** Instrução (delimitada por `;`) que contém a posição `pos`. */
+/** Statement (delimited by `;`) that contains position `pos`. */
 export function statementAt(doc: string, pos: number): { from: number; text: string } {
   const from = pos > 0 ? doc.lastIndexOf(";", pos - 1) + 1 : 0;
   const end = doc.indexOf(";", pos);
@@ -29,7 +29,7 @@ export function findTable(tables: TableInfo[], schema: string | null, name: stri
   return found.find((t) => t.schema === "public") ?? found[0];
 }
 
-/** Tabelas citadas após FROM/JOIN/UPDATE/INTO, com seus apelidos. */
+/** Tables mentioned after FROM/JOIN/UPDATE/INTO, with their aliases. */
 export function parseRefs(statement: string, tables: TableInfo[]): StatementRef[] {
   const ident = String.raw`"[^"]+"|[\w$]+`;
   const re = new RegExp(
@@ -48,8 +48,8 @@ export function parseRefs(statement: string, tables: TableInfo[]): StatementRef[
 }
 
 /**
- * Sugere um apelido curto: iniciais para nomes compostos (`user_roles` → `ur`),
- * senão as primeiras letras (`Class` → `cl`). Evita apelidos em uso e palavras reservadas.
+ * Suggests a short alias: initials for compound names (`user_roles` → `ur`),
+ * otherwise the first letters (`Class` → `cl`). Avoids aliases in use and reserved words.
  */
 export function makeAlias(table: string, taken: Set<string>): string {
   const words = table
@@ -75,7 +75,7 @@ function inStringOrComment(before: string): boolean {
 
 type Slot = { kind: "table"; alias: boolean } | { kind: "other" };
 
-/** O cursor está onde se espera um nome de tabela? E nele cabe um apelido? */
+/** Is the cursor where a table name is expected? And does an alias fit there? */
 function slotAt(beforeWord: string): Slot {
   const m = /\b(from|join|update|into|table|truncate)\s+$/i.exec(beforeWord);
   if (m) return { kind: "table", alias: /^(from|join|update)$/i.test(m[1]) };
@@ -111,7 +111,7 @@ function columnOptions(table: TableInfo, prefix: string): Completion[] {
   }));
 }
 
-/** Autocomplete de tabelas (com apelido automático), colunas e palavras-chave. */
+/** Autocomplete of tables (with automatic alias), columns and keywords. */
 export function createSqlCompletion(getTables: () => TableInfo[]): CompletionSource {
   return (ctx: CompletionContext): CompletionResult | null => {
     const word = ctx.matchBefore(/[\w$]*\.?[\w$]*/);

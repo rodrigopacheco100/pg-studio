@@ -12,13 +12,13 @@ class RunMarker extends GutterMarker {
   toDOM() {
     const el = document.createElement("span");
     el.className = "cm-run-btn";
-    el.title = "Executar esta query";
+    el.title = "Run this query";
     el.innerHTML = '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M6 4l14 8-14 8z"/></svg>';
     return el;
   }
 }
 
-/** Um marcador por instrução, na linha onde ela começa. */
+/** One marker per statement, on the line where it starts. */
 const markers = StateField.define<RangeSet<RunMarker>>({
   create: (state) => build(state.doc.toString(), state.doc),
   update: (value, tr) => (tr.docChanged ? build(tr.state.doc.toString(), tr.state.doc) : value),
@@ -29,7 +29,7 @@ function build(text: string, doc: { lineAt(pos: number): { from: number } }) {
   let lastLine = -1;
   for (const { from, to } of splitStatements(text)) {
     const line = doc.lineAt(from).from;
-    if (line === lastLine) continue; // várias instruções na mesma linha: só a primeira ganha o play
+    if (line === lastLine) continue; // several statements on the same line: only the first gets the play
     lastLine = line;
     builder.add(line, line, new RunMarker(text.slice(from, to)));
   }
@@ -50,7 +50,7 @@ const theme = EditorView.baseTheme({
   ".cm-run-btn:hover": { opacity: "1" },
 });
 
-/** Calha com um botão ▶ ao lado da primeira linha de cada instrução; o clique executa só ela. */
+/** Gutter with a ▶ button beside the first line of each statement; clicking runs only that one. */
 export function runGutter(onRun: (sql: string) => void): Extension {
   return [
     markers,

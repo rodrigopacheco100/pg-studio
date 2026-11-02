@@ -15,11 +15,11 @@ export function HistoryView({ onUse }: { onUse: (sql: string) => void }) {
     <>
       <div className="flex items-center border-b px-3 py-2">
         <Button variant="outline" size="sm" onClick={() => api.clearHistory().then(load)}>
-          <Trash2 /> Limpar histórico
+          <Trash2 /> Clear history
         </Button>
       </div>
       <ScrollArea className="min-h-0 flex-1">
-        {items.length === 0 && <div className="p-4 text-sm text-muted-foreground">Histórico vazio.</div>}
+        {items.length === 0 && <div className="p-4 text-sm text-muted-foreground">History is empty.</div>}
         {items.map((h) => (
           <div key={h.id} className="flex items-start gap-3 border-b px-4 py-2 hover:bg-muted/50">
             <pre
@@ -29,7 +29,7 @@ export function HistoryView({ onUse }: { onUse: (sql: string) => void }) {
               {h.sql}
             </pre>
             <span className={cn("shrink-0 text-xs text-muted-foreground", h.error && "text-destructive")}>
-              {h.ran_at} · {h.duration_ms} ms{h.error ? " · erro" : ""}
+              {h.ran_at} · {h.duration_ms} ms{h.error ? " · error" : ""}
             </span>
           </div>
         ))}

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "../api";
 import type { Conn, TableInfo } from "../types";
 
-/** Conexões salvas, conexão ativa e tabelas do banco conectado. */
+/** Saved connections, active connection and tables of the connected database. */
 export function useConnections() {
   const [connections, setConnections] = useState<Conn[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
@@ -18,7 +18,7 @@ export function useConnections() {
     setTables([]);
   }, []);
 
-  /** Lança erro se a conexão falhar. */
+  /** Throws if the connection fails. */
   const connect = useCallback(async (id: number) => {
     setConnecting(true);
     try {

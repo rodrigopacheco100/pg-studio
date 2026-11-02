@@ -2,13 +2,13 @@ import type { Conn } from "../types";
 
 export type ConnFields = Omit<Conn, "id" | "name">;
 
-/** Converte postgres://user:senha@host:porta/banco?sslmode=require nos campos de uma conexão. */
+/** Converts postgres://user:password@host:port/database?sslmode=require into the fields of a connection. */
 export function parseConnUrl(raw: string): ConnFields {
   const u = new URL(raw.trim());
   if (u.protocol !== "postgres:" && u.protocol !== "postgresql:") {
-    throw new Error("A URL deve começar com postgres:// ou postgresql://");
+    throw new Error("The URL must start with postgres:// or postgresql://");
   }
-  if (!u.hostname) throw new Error("URL sem host");
+  if (!u.hostname) throw new Error("URL without host");
   const mode = u.searchParams.get("sslmode") ?? "";
   return {
     host: decodeURIComponent(u.hostname),

@@ -7,16 +7,16 @@ const rows = [
   ["2", null],
 ];
 
-test("toJson mantém NULL e deduplica colunas repetidas", () => {
+test("toJson keeps NULL and dedupes repeated columns", () => {
   expect(JSON.parse(toJson(cols, rows))[1]).toEqual({ id: "2", name: null });
   expect(JSON.parse(toJson(["id", "id"], [["1", "2"]]))).toEqual([{ id: "1", id_2: "2" }]);
 });
 
-test("toCsv escapa aspas e vírgulas", () => {
+test("toCsv escapes quotes and commas", () => {
   expect(toCsv(cols, rows)).toBe('id,name\n1,"Ana, ""A"""\n2,');
 });
 
-test("toTsv troca tabs e quebras de linha por espaço", () => {
+test("toTsv replaces tabs and line breaks with spaces", () => {
   expect(toTsv(["a"], [["x\ty\nz"]])).toBe("a\nx y z");
   expect(toTsv(["a"], [["1"], [null]], false)).toBe("1\n");
 });

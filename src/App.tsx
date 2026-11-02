@@ -21,13 +21,13 @@ export function App() {
   const results = useResults();
   const [view, setView] = useState<View>("query");
   const [sql, setSql] = useState("");
-  /** `undefined` = fechado, `null` = nova conexão, `Conn` = edição. */
+  /** `undefined` = closed, `null` = new connection, `Conn` = editing. */
   const [dialog, setDialog] = useState<Conn | null | undefined>(undefined);
 
   const [restored, setRestored] = useState(false);
   const { settings, update } = useSettings();
 
-  // O backend reabre a conexão sozinho quando ela cai; avisa porque a sessão do banco recomeça do zero.
+  // The backend reopens the connection by itself when it drops; warns because the database session starts over.
   useEffect(() => {
     let off: (() => void) | undefined;
     let cancelled = false;
@@ -57,12 +57,12 @@ export function App() {
       else await ws.connect(c.id!);
       resetWorkspace();
     } catch (e) {
-      alert(`Falha ao conectar:\n${errText(e)}`);
+      alert(`Failed to connect:\n${errText(e)}`);
     }
   }
 
   async function remove(c: Conn) {
-    if (!confirm("Excluir esta conexão?")) return;
+    if (!confirm("Delete this connection?")) return;
     const wasActive = c.id === ws.activeId;
     await ws.remove(c.id!);
     if (wasActive) resetWorkspace();
@@ -73,7 +73,7 @@ export function App() {
     setView("query");
   }
 
-  const tabs: [View, string][] = [["query", "Query"], ["history", "Histórico"], ["saved", "Salvas"]];
+  const tabs: [View, string][] = [["query", "Query"], ["history", "History"], ["saved", "Saved"]];
 
   return (
     <TooltipProvider>
@@ -97,11 +97,11 @@ export function App() {
               </TabsList>
             </Tabs>
             <span className="pr-2 text-xs text-muted-foreground">
-              {ws.connecting ? "Conectando…" : active ? `${active.name} (${active.database})` : ""}
+              {ws.connecting ? "Connecting…" : active ? `${active.name} (${active.database})` : ""}
             </span>
           </div>
           <div className="flex min-h-0 flex-1 flex-col">
-            {/* Mantida montada para preservar o editor (cursor, desfazer) ao trocar de aba. */}
+            {/* Kept mounted to preserve the editor (cursor, undo) when switching tabs. */}
             <div className="flex min-h-0 flex-1 flex-col" hidden={view !== "query"}>
               <QueryView sql={sql} tables={ws.tables} onSqlChange={setSql} results={results} />
             </div>

@@ -1,49 +1,50 @@
 # PG Studio
 
-Cliente desktop leve para PostgreSQL, feito com Tauri 2 (Rust) e React.
+A lightweight desktop client for PostgreSQL, built with Tauri 2 (Rust) and React.
 
-## Recursos
+## Features
 
-- Conexões salvas (com opção de SSL), abertas e fechadas pela sidebar
-- Lista de tabelas do banco conectado; clique para ver o conteúdo, paginado
-- Editor SQL (CodeMirror) com autocomplete de tabelas e colunas
-- Execução com `Ctrl+Enter`; autocomplete com `Ctrl+Espaço`
-- Histórico de queries executadas e queries salvas com nome
-- Resultados com seleção de células e cópia como JSON, CSV, TSV e INSERT
-- Reconexão automática quando a conexão cai, com aviso na barra de status
-- Sidebar e editor redimensionáveis; os tamanhos são lembrados entre sessões
+- Saved connections (with optional SSL), opened and closed from the sidebar
+- Table list of the connected database; click one to browse its contents, paginated
+- SQL editor (CodeMirror) with table and column autocomplete
+- A ▶ button beside the first line of each statement runs just that statement
+- `Ctrl+Enter` runs the selection or the whole editor, `Ctrl+Shift+Enter` runs the statement at the cursor, `Ctrl+Space` autocompletes
+- Query history and named saved queries
+- Results with cell selection and copy as JSON, CSV, TSV and INSERT
+- Automatic reconnection when the connection drops, with a notice in the status bar
+- Resizable sidebar and editor; sizes are remembered between sessions
 
-## Requisitos
+## Requirements
 
 - [Bun](https://bun.sh)
-- [Rust](https://rustup.rs) (toolchain estável)
-- [Dependências de sistema do Tauri 2](https://tauri.app/start/prerequisites/) para o seu sistema operacional
+- [Rust](https://rustup.rs) (stable toolchain)
+- [Tauri 2 system dependencies](https://tauri.app/start/prerequisites/) for your operating system
 
-## Desenvolvimento
+## Development
 
 ```sh
 bun install
-bun run tauri dev     # app completo (Tauri + Vite)
-bun run dev           # só o frontend, em http://localhost:1420
-bun test              # testes dos utilitários em src/lib
-bun run build         # checagem de tipos + build do frontend
-bun run tauri build   # gera o instalador
+bun run tauri dev     # full app (Tauri + Vite)
+bun run dev           # frontend only, at http://localhost:1420
+bun test              # tests for the utilities in src/lib
+bun run build         # type check + frontend build
+bun run tauri build   # produces the installer
 ```
 
-## Dados locais
+## Local data
 
-Ficam no diretório de dados do app, no sistema operacional:
+Stored in the app data directory of your operating system:
 
-| Arquivo | Conteúdo |
+| File | Contents |
 |---|---|
-| `pg-studio.sqlite` | conexões salvas, histórico e queries salvas |
-| `settings.json` | configurações do programa (tamanhos da sidebar e do editor) |
+| `pg-studio.sqlite` | saved connections, history and saved queries |
+| `settings.json` | program settings (sidebar width and editor height) |
 
-As senhas das conexões ficam no SQLite sem criptografia.
+Connection passwords are stored in the SQLite file unencrypted.
 
-## Estrutura
+## Structure
 
-- `src/`: frontend React (componentes, views, hooks, utilitários)
-- `src-tauri/`: backend Rust (comandos Tauri, acesso ao PostgreSQL, SQLite local, configurações)
+- `src/`: React frontend (components, views, hooks, utilities)
+- `src-tauri/`: Rust backend (Tauri commands, PostgreSQL access, local SQLite, settings)
 
-Detalhes de arquitetura e convenções estão em [AGENTS.md](AGENTS.md).
+See [AGENTS.md](AGENTS.md) for architecture details and conventions.

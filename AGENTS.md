@@ -1,47 +1,53 @@
 # PG Studio
 
-Cliente desktop de PostgreSQL. Tauri 2 (Rust) + React 19 + TypeScript + Vite + Tailwind 4 + shadcn/radix. Editor SQL em CodeMirror. Idioma da UI e dos comentários: português (pt-BR).
+Desktop PostgreSQL client. Tauri 2 (Rust) + React 19 + TypeScript + Vite + Tailwind 4 + shadcn/radix. SQL editor in CodeMirror. All UI text, comments, docs and commit messages are in English.
 
-## Comandos
+## Commands
 
-- `bun run dev` / `bun run tauri dev`: frontend / app completo
-- `bun run build`: `tsc --noEmit` + `vite build` (use `npx tsc --noEmit` como checagem rápida)
-- `bun test`: testes de `src/lib/*.test.ts`
-- `cargo check` em `src-tauri/`: checagem do backend
+- `bun run dev` / `bun run tauri dev`: frontend / full app
+- `bun run build`: `tsc --noEmit` + `vite build` (use `npx tsc --noEmit` as a quick check)
+- `bun test`: tests in `src/lib/*.test.ts`
+- `cargo check` in `src-tauri/`: backend check
 
-## Arquitetura
+## Architecture
 
-- `src-tauri/src/lib.rs`: `AppState` e comandos Tauri (`#[tauri::command]`). Todo comando novo entra em `generate_handler!` e ganha um wrapper em `src/api.ts` (único lugar que chama `invoke`).
-- `src-tauri/src/local.rs`: SQLite local (`pg-studio.sqlite`): conexões salvas, histórico, queries salvas.
-- `src-tauri/src/pg.rs`: acesso ao PostgreSQL (conexão, queries, tabelas).
-- `src-tauri/src/settings.rs`: configurações do programa (ver abaixo).
-- `src/App.tsx`: layout (sidebar + abas Query/Histórico/Salvas + status bar). O `QueryView` fica sempre montado para preservar o editor.
-- `src/hooks/`: estado da UI (`useConnections`, `useResults`, `useSettings`). `src/components/`, `src/views/`, `src/lib/` (utilitários puros, com testes). Componentes shadcn em `src/components/ui/`.
-- `src/types.ts`: tipos compartilhados com o backend (serde em camelCase onde indicado).
+- `src-tauri/src/lib.rs`: `AppState` and Tauri commands (`#[tauri::command]`). Every new command goes into `generate_handler!` and gets a wrapper in `src/api.ts` (the only place that calls `invoke`).
+- `src-tauri/src/local.rs`: local SQLite (`pg-studio.sqlite`): saved connections, history, saved queries.
+- `src-tauri/src/pg.rs`: PostgreSQL access (connection, queries, tables).
+- `src-tauri/src/settings.rs`: program settings (see below).
+- `src/App.tsx`: layout (sidebar + Query/History/Saved tabs + status bar). `QueryView` stays mounted to preserve the editor.
+- `src/hooks/`: UI state (`useConnections`, `useResults`, `useSettings`). `src/components/`, `src/views/`, `src/lib/` (pure utilities, with tests). shadcn components in `src/components/ui/`.
+- `src/types.ts`: types shared with the backend (serde in camelCase where noted).
 
-## Configurações do programa (`settings.json`)
+## Program settings (`settings.json`)
 
-Arquivo `settings.json` no diretório de dados do app (`app_data_dir`, junto do SQLite). **Toda** configuração do programa passa por aqui; não crie outro mecanismo (localStorage, outro arquivo etc.).
+`settings.json` lives in the app data directory (`app_data_dir`, next to the SQLite file). **Every** program setting goes through it; do not create another mechanism (localStorage, another file, etc.).
 
-- Backend: `Settings` + `SettingsStore` em `settings.rs`, guardado em `AppState.settings`. Comandos `get_settings` / `set_settings` (substitui o objeto inteiro). Campos ausentes ou arquivo corrompido caem nos padrões (`#[serde(default)]`); a escrita é atômica (arquivo temporário + rename).
-- Frontend: `SettingsProvider` (em `main.tsx`) carrega uma vez e expõe `useSettings()` → `{ settings, update(patch) }`. `update` aplica na hora e persiste com debounce de 300 ms. Só renderiza a app depois de carregar.
-- Para adicionar uma configuração: (1) campo e padrão em `Settings`/`Default` (`settings.rs`); (2) campo em `Settings` de `src/types.ts` (mesmo nome em camelCase); (3) usar `useSettings()` onde precisar. Nada mais muda.
+- Backend: `Settings` + `SettingsStore` in `settings.rs`, held in `AppState.settings`. Commands `get_settings` / `set_settings` (replaces the whole object). Missing fields or a corrupted file fall back to the defaults (`#[serde(default)]`); writes are atomic (temporary file + rename).
+- Frontend: `SettingsProvider` (in `main.tsx`) loads once and exposes `useSettings()` → `{ settings, update(patch) }`. `update` applies immediately and persists with a 300 ms debounce. The app only renders after loading.
+- To add a setting: (1) field and default in `Settings`/`Default` (`settings.rs`); (2) field in `Settings` of `src/types.ts` (same name in camelCase); (3) use `useSettings()` where needed. Nothing else changes.
 
-Configurações atuais:
+Current settings:
 
-| Campo | Padrão | Uso |
+| Field | Default | Use |
 |---|---|---|
-| `sidebarWidth` | 256 (px) | Largura da sidebar; limites 180–560 em `Sidebar.tsx` |
-| `editorHeight` | 300 (px) | Altura do editor SQL sobre os resultados; mínimo 128, máximo 80% da área (`QueryView.tsx`) |
+| `sidebarWidth` | 256 (px) | Sidebar width; limits 180–560 in `Sidebar.tsx` |
+| `editorHeight` | 300 (px) | SQL editor height above the results; minimum 128, maximum 80% of the area (`QueryView.tsx`) |
 
-Valores são inteiros (`u32` no Rust); arredonde antes de gravar.
+Values are integers (`u32` in Rust); round before saving.
 
-## Redimensionamento
+## Resizing
 
-`src/components/ResizeHandle.tsx`: alça arrastável (`axis` `x`/`y`) posicionada na borda direita/inferior do pai, que precisa ser `relative`. Recebe `size`, `min`, `max` e `onChange`; os limites são aplicados nela. O valor vem e vai para `useSettings()`.
+`src/components/ResizeHandle.tsx`: draggable handle (`axis` `x`/`y`) placed on the parent's right/bottom edge; the parent must be `relative`. Takes `size`, `min`, `max` and `onChange`; the limits are applied inside it. The value comes from and goes to `useSettings()`. While dragging it disables text selection on `body`.
 
-## Convenções
+## SQL editor
 
-- Erros do backend são `String` (`CmdResult<T>`); no frontend use `errText`.
-- Locks do `Mutex` nunca atravessam `.await`.
-- Mantenha a mudança mínima e no dono certo da responsabilidade; sem abstrações especulativas.
+- `src/lib/statements.ts`: `splitStatements` splits a script on `;` outside strings, quoted identifiers, comments and `$tag$` blocks; `statementAtCursor` picks the statement under the cursor. Not handled: backslash escapes in `E'...'` strings.
+- `src/components/runGutter.ts`: a ▶ marker on the first line of each statement; clicking runs only that statement.
+- `SqlEditor` calls `onRun(sql)`: `Ctrl+Enter` passes the selection or whole text, `Ctrl+Shift+Enter` the statement at the cursor, the ▶ its own statement.
+
+## Conventions
+
+- Backend errors are `String` (`CmdResult<T>`); on the frontend use `errText`.
+- `Mutex` locks never cross an `.await`.
+- Keep changes minimal and in the right owner of the responsibility; no speculative abstractions.

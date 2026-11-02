@@ -16,7 +16,7 @@ interface Props {
   results: ResultsApi;
 }
 
-/** Editor de query sobre o painel de resultados compartilhado. */
+/** Query editor on top of the shared results pane. */
 export function QueryView({ sql, tables, onSqlChange, results }: Props) {
   const editor = useRef<SqlEditorHandle>(null);
   const { settings, update } = useSettings();
@@ -27,7 +27,7 @@ export function QueryView({ sql, tables, onSqlChange, results }: Props) {
 
   async function save() {
     if (!sql.trim()) return;
-    const name = prompt("Nome da query:");
+    const name = prompt("Query name:");
     if (name) await api.saveQuery({ id: null, name, sql });
   }
 
@@ -36,9 +36,9 @@ export function QueryView({ sql, tables, onSqlChange, results }: Props) {
       <div className="relative flex max-h-[80%] min-h-32 shrink-0 flex-col border-b" style={{ height: settings.editorHeight }}>
         <ResizeHandle axis="y" size={settings.editorHeight} min={128} onChange={(editorHeight) => update({ editorHeight })} />
         <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
-          <Button size="sm" onClick={() => run(editor.current?.getRunText() ?? "")}><Play /> Executar</Button>
-          <Button size="sm" variant="outline" onClick={save}><Save /> Salvar query</Button>
-          <span className="ml-auto text-xs text-muted-foreground">Ctrl+Enter executa tudo · Ctrl+Shift+Enter executa a query do cursor · Ctrl+Espaço autocompleta</span>
+          <Button size="sm" onClick={() => run(editor.current?.getRunText() ?? "")}><Play /> Run</Button>
+          <Button size="sm" variant="outline" onClick={save}><Save /> Save query</Button>
+          <span className="ml-auto text-xs text-muted-foreground">Ctrl+Enter runs all · Ctrl+Shift+Enter runs the query at the cursor · Ctrl+Space autocompletes</span>
         </div>
         <SqlEditor ref={editor} value={sql} tables={tables} onChange={onSqlChange} onRun={run} />
       </div>

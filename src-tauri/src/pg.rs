@@ -1,7 +1,7 @@
-//! Conexão e execução de SQL no Postgres.
+//! Connection and SQL execution on Postgres.
 //!
-//! Usa o protocolo simples (`simple_query`): todo valor volta como texto (ou NULL),
-//! o que dispensa mapear tipos Postgres e permite várias instruções por execução.
+//! Uses the simple protocol (`simple_query`): every value comes back as text (or NULL),
+//! which avoids mapping Postgres types and allows several statements per execution.
 
 use crate::local::ConnectionConfig;
 use serde::Serialize;
@@ -13,7 +13,7 @@ use tokio_postgres::{CancelToken, Client, Config, NoTls, SimpleQueryMessage};
 pub struct QueryResult {
     pub columns: Vec<String>,
     pub rows: Vec<Vec<Option<String>>>,
-    /// Linhas afetadas/retornadas, conforme o CommandComplete do servidor.
+    /// Affected/returned rows, as reported by the server's CommandComplete.
     pub affected: Option<u64>,
 }
 
@@ -31,7 +31,7 @@ pub struct TableInfo {
     pub columns: Vec<ColumnInfo>,
 }
 
-/// Conexão com o token que permite cancelar a query em andamento.
+/// Connection with the token that allows cancelling the running query.
 pub struct Session {
     pub client: Client,
     token: CancelToken,
@@ -39,7 +39,7 @@ pub struct Session {
 }
 
 impl Session {
-    /// Pede ao servidor para interromper a query em execução nesta conexão.
+    /// Asks the server to interrupt the query running on this connection.
     pub async fn cancel(&self) {
         let _ = match &self.tls {
             Some(tls) => self.token.cancel_query(tls.clone()).await,
@@ -56,13 +56,13 @@ pub async fn open(c: &ConnectionConfig) -> Result<Session, String> {
         .user(&c.user)
         .password(&c.password)
         .connect_timeout(Duration::from_secs(10))
-        // O padrão do TCP é sondar após 2 h de ociosidade; redes e proxies derrubam conexões
-        // ociosas bem antes disso. Sondar a cada 30 s mantém a conexão viva e revela quedas cedo.
+        // TCP's default is to probe after 2 h of idleness; networks and proxies drop idle
+        // connections well before that. Probing every 30 s keeps the connection alive and reveals drops early.
         .keepalives(true)
         .keepalives_idle(Duration::from_secs(30));
 
     if c.ssl {
-        // Equivale a sslmode=require do libpq: criptografa, mas não valida o certificado.
+        // Equivalent to libpq's sslmode=require: encrypts, but does not validate the certificate.
         let tls = native_tls::TlsConnector::builder()
             .danger_accept_invalid_certs(true)
             .build()
@@ -82,7 +82,7 @@ pub async fn open(c: &ConnectionConfig) -> Result<Session, String> {
     }
 }
 
-/// Executa `sql` (uma ou mais instruções) e devolve um resultado por instrução.
+/// Runs `sql` (one or more statements) and returns one result per statement.
 pub async fn run(client: &Client, sql: &str) -> Result<Vec<QueryResult>, String> {
     let messages = client.simple_query(sql).await.map_err(|e| e.to_string())?;
 
@@ -115,7 +115,7 @@ pub async fn run(client: &Client, sql: &str) -> Result<Vec<QueryResult>, String>
     Ok(results)
 }
 
-/// Tabelas/views com suas colunas (usadas no autocomplete do editor).
+/// Tables/views with their columns (used by the editor's autocomplete).
 pub async fn list_tables(client: &Client) -> Result<Vec<TableInfo>, String> {
     let sql = "SELECT t.table_schema, t.table_name, t.table_type, c.column_name, c.data_type
                FROM information_schema.tables t
@@ -139,7 +139,7 @@ pub async fn list_tables(client: &Client) -> Result<Vec<TableInfo>, String> {
             tables.push(TableInfo { schema, name, kind, columns: Vec::new() });
         }
         if let Some(column) = column {
-            let table = tables.last_mut().expect("tabela acabou de ser inserida");
+            let table = tables.last_mut().expect("table was just inserted");
             table.columns.push(ColumnInfo { name: column, data_type });
         }
     }
@@ -167,7 +167,7 @@ pub async fn table_data(
     Ok(run(client, &sql).await?.into_iter().next().unwrap_or_default())
 }
 
-/// Total de linhas da tabela, ignorando paginação.
+/// Total rows of the table, ignoring pagination.
 pub async fn table_count(client: &Client, schema: &str, table: &str) -> Result<u64, String> {
     let sql = format!("SELECT count(*) FROM {}.{}", quote_ident(schema), quote_ident(table));
     let res = run(client, &sql).await?.into_iter().next().unwrap_or_default();
@@ -176,5 +176,5 @@ pub async fn table_count(client: &Client, schema: &str, table: &str) -> Result<u
         .next()
         .and_then(|row| row.into_iter().next().flatten())
         .and_then(|n| n.parse().ok())
-        .ok_or_else(|| "contagem inválida".to_string())
+        .ok_or_else(|| "invalid count".to_string())
 }
