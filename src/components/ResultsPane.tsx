@@ -1,19 +1,19 @@
 import { useMemo } from "react";
+import { NO_VIEW } from "../lib/gridView";
 import { type ResultsApi } from "../hooks/useResults";
 import { ResultViewer } from "./ResultViewer";
 
 /** Single results pane: shows the last query or the opened table. Pagination lives in the footer. */
 export function ResultsPane({ results }: { results: ResultsApi }) {
-  const { outcome, source, pageSize } = results;
+  const { outcome, displayed, views, source, pageSize, setView } = results;
   const table = source.kind === "table" ? source.table : undefined;
 
-  // Tables already arrive paginated from the server; queries arrive whole and are sliced here.
+  // Tables already arrive paginated from the server; queries arrive whole (sorted and filtered in `useResults`) and are sliced here.
   const visible = useMemo(() => {
-    if (outcome?.kind !== "ok") return [];
-    if (source.kind === "table") return outcome.results;
+    if (source.kind === "table") return displayed;
     const from = source.page * pageSize;
-    return outcome.results.map((r) => ({ ...r, rows: r.rows.slice(from, from + pageSize) }));
-  }, [outcome, source, pageSize]);
+    return displayed.map((r) => ({ ...r, rows: r.rows.slice(from, from + pageSize) }));
+  }, [displayed, source, pageSize]);
 
   const msg = "p-4 text-sm text-muted-foreground";
   return (
@@ -27,7 +27,7 @@ export function ResultsPane({ results }: { results: ResultsApi }) {
       )}
       {outcome?.kind === "ok" && (
         <>
-          {visible.map((r, i) => <ResultViewer key={i} result={r} table={table} />)}
+          {visible.map((r, i) => <ResultViewer key={i} result={r} table={table} view={views[i] ?? NO_VIEW} onViewChange={(v) => setView(i, v)} />)}
           {visible.length === 0 && <div className={msg}>No results.</div>}
         </>
       )}

@@ -170,7 +170,7 @@ impl AppState {
     /// Counts rows on a connection of its own: the server handles one query at a time per connection, so
     /// counting on the shared one would hold up the user's queries until count(*) finishes. Starting a new
     /// count cancels the previous one.
-    pub async fn count_rows(&self, schema: &str, table: &str) -> CmdResult<u64> {
+    pub async fn count_rows(&self, schema: &str, table: &str, view: &pg::GridQuery) -> CmdResult<u64> {
         let config = {
             let active = self.active.lock().await;
             active.as_ref().map(|a| a.config.clone()).ok_or_else(|| "Not connected".to_string())?
@@ -180,7 +180,7 @@ impl AppState {
             tauri::async_runtime::spawn(async move { previous.cancel().await });
         }
 
-        let total = pg::table_count(&session.client, schema, table).await;
+        let total = pg::table_count(&session.client, schema, table, view).await;
 
         let mut counting = self.counting.lock().await;
         if counting.as_ref().is_some_and(|c| Arc::ptr_eq(c, &session)) {

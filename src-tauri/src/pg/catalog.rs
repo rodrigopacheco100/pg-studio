@@ -1,7 +1,7 @@
 //! Catalog queries for the sidebar: tables, columns, constraints, indexes, permissions.
 
 use super::query::{run, run_typed, QueryResult};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio_postgres::Client;
 
 #[derive(Serialize)]
@@ -53,26 +53,72 @@ fn quote_ident(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
+/// How the grid wants a table's rows: an optional sort and, per column, a text the cell must contain.
+#[derive(Deserialize, Default)]
+pub struct GridQuery {
+    pub sort: Option<GridSort>,
+    pub filters: Vec<GridFilter>,
+}
+
+#[derive(Deserialize)]
+pub struct GridSort {
+    pub column: String,
+    pub desc: bool,
+}
+
+#[derive(Deserialize)]
+pub struct GridFilter {
+    pub column: String,
+    pub text: String,
+}
+
+impl GridQuery {
+    /// `WHERE` clause (with a leading space; empty without filters). A cell matches when its text contains
+    /// the filter, ignoring case; NULL counts as the text `NULL`, as in the grid.
+    fn where_clause(&self) -> String {
+        let conditions: Vec<String> = self
+            .filters
+            .iter()
+            .map(|f| {
+                let pattern = f.text.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+                format!("COALESCE({}::text, 'NULL') ILIKE {}", quote_ident(&f.column), quote_literal(&format!("%{pattern}%")))
+            })
+            .collect();
+        if conditions.is_empty() { String::new() } else { format!(" WHERE {}", conditions.join(" AND ")) }
+    }
+
+    /// `ORDER BY` clause (with a leading space; empty without sort). NULLs last in both directions.
+    fn order_clause(&self) -> String {
+        match &self.sort {
+            Some(s) => format!(" ORDER BY {} {} NULLS LAST", quote_ident(&s.column), if s.desc { "DESC" } else { "ASC" }),
+            None => String::new(),
+        }
+    }
+}
+
 pub async fn table_data(
     client: &Client,
     schema: &str,
     table: &str,
     limit: u32,
     offset: u32,
+    view: &GridQuery,
 ) -> Result<QueryResult, String> {
     let sql = format!(
-        "SELECT * FROM {}.{} LIMIT {} OFFSET {}",
+        "SELECT * FROM {}.{}{}{} LIMIT {} OFFSET {}",
         quote_ident(schema),
         quote_ident(table),
+        view.where_clause(),
+        view.order_clause(),
         limit,
         offset
     );
     Ok(run_typed(client, &sql, std::slice::from_ref(&sql)).await?.into_iter().next().unwrap_or_default())
 }
 
-/// Total rows of the table, ignoring pagination.
-pub async fn table_count(client: &Client, schema: &str, table: &str) -> Result<u64, String> {
-    let sql = format!("SELECT count(*) FROM {}.{}", quote_ident(schema), quote_ident(table));
+/// Rows of the table that match the filters of `view`, ignoring pagination.
+pub async fn table_count(client: &Client, schema: &str, table: &str, view: &GridQuery) -> Result<u64, String> {
+    let sql = format!("SELECT count(*) FROM {}.{}{}", quote_ident(schema), quote_ident(table), view.where_clause());
     let res = run(client, &sql).await?.into_iter().next().unwrap_or_default();
     res.rows
         .into_iter()
@@ -266,4 +312,42 @@ pub async fn table_item(client: &Client, schema: &str, table: &str, kind: &str, 
         .and_then(|row| row.into_iter().next().flatten())
         .ok_or_else(|| format!("{name} was not found"))?;
     serde_json::from_str(&json).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn filter(column: &str, text: &str) -> GridFilter {
+        GridFilter { column: column.into(), text: text.into() }
+    }
+
+    #[test]
+    fn no_view_adds_nothing() {
+        let v = GridQuery::default();
+        assert_eq!((v.where_clause(), v.order_clause()), (String::new(), String::new()));
+    }
+
+    #[test]
+    fn filters_match_text_ignoring_case_and_quote_everything() {
+        let v = GridQuery { sort: None, filters: vec![filter("Na\"me", "o'brien"), filter("id", "5")] };
+        assert_eq!(
+            v.where_clause(),
+            " WHERE COALESCE(\"Na\"\"me\"::text, 'NULL') ILIKE '%o''brien%' AND COALESCE(\"id\"::text, 'NULL') ILIKE '%5%'"
+        );
+    }
+
+    #[test]
+    fn like_wildcards_in_the_text_are_literal() {
+        let v = GridQuery { sort: None, filters: vec![filter("a", "50%_\\")] };
+        assert_eq!(v.where_clause(), " WHERE COALESCE(\"a\"::text, 'NULL') ILIKE '%50\\%\\_\\\\%'");
+    }
+
+    #[test]
+    fn sort_puts_nulls_last_both_ways() {
+        let asc = GridQuery { sort: Some(GridSort { column: "n".into(), desc: false }), filters: vec![] };
+        let desc = GridQuery { sort: Some(GridSort { column: "n".into(), desc: true }), filters: vec![] };
+        assert_eq!(asc.order_clause(), " ORDER BY \"n\" ASC NULLS LAST");
+        assert_eq!(desc.order_clause(), " ORDER BY \"n\" DESC NULLS LAST");
+    }
 }

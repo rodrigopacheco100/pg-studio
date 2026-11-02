@@ -9,7 +9,7 @@ mod error;
 mod query;
 
 pub use catalog::{
-    list_tables, table_count, table_data, table_details, table_item, DetailItem, TableInfo,
+    list_tables, table_count, table_data, table_details, table_item, DetailItem, GridQuery, TableInfo,
 };
 pub use connection::{open, set_statement_timeout, Session};
 pub use query::{run_typed, QueryResult};

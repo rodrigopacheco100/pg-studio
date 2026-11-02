@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
+import type { GridQuery } from "./lib/gridView";
 import type { Conn, DetailItem, Folder, KnownHost, DetailKind, ItemDetailsMap, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, StoredTheme, TableInfo, VaultStatus } from "./types";
 
 /** One typed wrapper per Tauri command defined in src-tauri/src/lib.rs. */
@@ -29,14 +30,14 @@ export const api = {
 
   /** `statements` are the individual statements of `sql`; the backend uses them to learn the column types. */
   runQuery: (sql: string, statements: string[]) => invoke<QueryOutput>("run_query", { sql, statements }),
-  tableData: (schema: string, table: string, limit: number, offset: number) =>
-    invoke<QueryResult>("table_data", { schema, table, limit, offset }),
+  tableData: (schema: string, table: string, limit: number, offset: number, view: GridQuery) =>
+    invoke<QueryResult>("table_data", { schema, table, limit, offset, view }),
 
   tableDetails: (schema: string, table: string, kind: DetailKind) =>
     invoke<DetailItem[]>("table_details", { schema, table, kind }),
   tableItem: <K extends DetailKind>(schema: string, table: string, kind: K, name: string) =>
     invoke<ItemDetailsMap[K]>("table_item", { schema, table, kind, name }),
-  tableCount: (schema: string, table: string) => invoke<number>("table_count", { schema, table }),
+  tableCount: (schema: string, table: string, view: GridQuery) => invoke<number>("table_count", { schema, table, view }),
 
   listHistory: () => invoke<HistoryEntry[]>("list_history"),
   clearHistory: () => invoke<void>("clear_history"),

@@ -65,8 +65,17 @@ Values are integers (`u32` in Rust); round before saving.
 - `src/lib/formatSql.ts`: PostgreSQL formatting via `sql-formatter` (upper-case keywords, 2 spaces). `SqlEditor`'s handle `format()` replaces the document in one undoable transaction; bound to the Beautify button and `Ctrl+Shift+F` in `QueryView`.
 - Column types: the simple protocol returns every value as text without types, so `pg::run_typed` prepares the individual statements (sent by the frontend alongside the SQL, from `splitStatements`) after running the script to learn each result's column types (`QueryResult.types`). Booleans are rewritten from `t`/`f` to `true`/`false`, and the grid shows them in italics. If the statements cannot be matched to the results, `types` stays empty and values are shown as received.
 - `src/lib/destructive.ts`: `destructiveStatements` finds `DROP`, `TRUNCATE`, `ALTER ... DROP` (except `DROP DEFAULT` / `NOT NULL`) and `DELETE` / `UPDATE` without a `WHERE` at their own level (also after a `WITH` and inside data-modifying CTE bodies), ignoring strings and comments. `QueryView.run` lists them in a confirmation before any run (menu, shortcuts and the ▶ marker all go through it) unless `confirmDestructive` is off.
+- Autocomplete (`src/lib/sqlComplete.ts`): tables (with an automatic alias), columns, keywords and `SNIPPETS` (`sel`, `ins`, `upd`, `del`, `crt`, `idx`, `cte`, `cnt`), offered only at the start of a statement; `Tab` walks through a snippet's `${fields}`. `SqlEditor` keeps `indentWithTab` below the default precedence so the snippet keymap gets `Tab` first.
 - `src/components/runGutter.ts`: a ▶ marker on the first line of each statement; clicking runs only that statement.
 - `SqlEditor` calls `onRun(sql)`: `Ctrl+Enter` passes the selection or whole text, `Ctrl+Shift+Enter` the statement at the cursor, the ▶ its own statement.
+
+## Results grid
+
+`ResultViewer` shows the rows of one result and lets the user sort and filter them: a sort button in each header (ascending, descending, off; NULLs last) and a Filter toggle that adds a text field per column (case-insensitive "contains"; a NULL cell matches `NULL`). It only edits a `GridView` (`src/lib/gridView.ts`, tested) and shows the `result` it is given, already sorted and filtered, so selection, copy and JSON act on what is on screen. The view covers the whole result, not the page: `useResults` owns it (`views`, `setView`, per result) and applies it before pagination.
+
+- **Queries** arrive whole: `applyView` sorts and filters them on the client (`displayed`), then `ResultsPane` slices the page and `paging.total` counts the filtered rows. Numbers sort by value, other types as text.
+- **Opened tables** are paginated by the server, so the view goes there: `table_data` / `table_count` take a `GridQuery` (`pg/catalog.rs`: sort column and per-column texts, columns by name) that becomes `ORDER BY "col" NULLS LAST` and `WHERE COALESCE("col"::text, 'NULL') ILIKE '%text%'` (identifiers quoted, literals escaped, `%` `_` `\` in the text taken literally; unit-tested). The total in the footer counts the matching rows. A view change reloads from page 0 after 250 ms without keystrokes and keeps the rows on screen (`openTable(..., quiet)`), so the filter fields keep focus.
+- The view resets on a new query or table. Elements marked `data-nodrag` (sort button, filter fields) are ignored by the grid's mouse selection and context menu.
 
 ## Editor documents
 

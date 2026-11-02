@@ -38,14 +38,15 @@ pub async fn table_data(
     table: String,
     limit: u32,
     offset: u32,
+    view: pg::GridQuery,
 ) -> CmdResult<QueryResult> {
     let client = state.client().await?;
-    pg::table_data(&client, &schema, &table, limit, offset).await
+    pg::table_data(&client, &schema, &table, limit, offset, &view).await
 }
 
 #[tauri::command]
-pub async fn table_count(state: State<'_, AppState>, schema: String, table: String) -> CmdResult<u64> {
-    state.count_rows(&schema, &table).await
+pub async fn table_count(state: State<'_, AppState>, schema: String, table: String, view: pg::GridQuery) -> CmdResult<u64> {
+    state.count_rows(&schema, &table, &view).await
 }
 
 #[tauri::command]

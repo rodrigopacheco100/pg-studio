@@ -3,7 +3,10 @@ import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent,
   ContextMenuSubTrigger, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
+import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { isActive, nextSort, NO_VIEW, withFilter, type GridView } from "../lib/gridView";
 import { toCsv, toInsert, toJson, toTsv, type Row } from "../lib/rowFormat";
 import {
   cellRange, colRange, colsOf, contains, rowRange, rowsOf,
@@ -36,6 +39,9 @@ interface Props {
   result: QueryResult;
   /** When the result is the contents of a table, enables "Copy as INSERT". */
   table?: TableRef;
+  /** Sort and filters of the result; the owner applies them to `result` (it already comes sorted and filtered). */
+  view: GridView;
+  onViewChange: (view: GridView) => void;
 }
 
 /** Reads the position (row/column) of a grid element; undefined outside it. */
@@ -107,7 +113,11 @@ function renderMenu(items: MenuItem[]): React.ReactNode {
 }
 
 /** Single results viewer: cell/row/column selection, drag and context menu. */
-export function ResultViewer({ result, table }: Props) {
+export function ResultViewer({ result, table, view, onViewChange }: Props) {
+  const [filtering, setFiltering] = useState(false);
+  const columnsKey = result.columns.join("\u0000");
+  useEffect(() => setFiltering(false), [columnsKey]);
+
   const [ranges, setRanges] = useState<Range[]>([]);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [json, setJson] = useState<string | null>(null);
@@ -207,6 +217,7 @@ export function ResultViewer({ result, table }: Props) {
   function onMouseDown(e: React.MouseEvent) {
     if (e.button !== 0) return;
     const el = e.target as Element;
+    if (el.closest("[data-nodrag]")) return; // sort button and filter fields keep their own behavior
     if (el.closest("th.corner")) {
       selectAll();
       return;
@@ -232,6 +243,7 @@ export function ResultViewer({ result, table }: Props) {
 
   // Radix opens the menu at the cursor position; here we only decide the selection and the action target.
   function onContextMenu(e: React.MouseEvent) {
+    if ((e.target as Element).closest("[data-nodrag]")) return; // the field's own menu
     if (shown === 0) {
       e.preventDefault();
       return;
@@ -348,6 +360,25 @@ export function ResultViewer({ result, table }: Props) {
 
   return (
     <div className="outline-none" tabIndex={0} ref={root} onKeyDown={onKeyDown}>
+      <div className="flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground">
+        <button
+          type="button"
+          aria-pressed={filtering}
+          className={cn("flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-accent", filtering && "bg-accent text-foreground")}
+          onClick={() => setFiltering((f) => !f)}
+        >
+          <ListFilter className="size-3" /> Filter
+        </button>
+        {isActive(view) && (
+          <button
+            type="button"
+            className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-accent"
+            onClick={() => onViewChange(NO_VIEW)}
+          >
+            <X className="size-3" /> Clear sort and filters
+          </button>
+        )}
+      </div>
       <ContextMenu onOpenChange={(open) => !open && setMenu(null)}>
         <ContextMenuTrigger asChild>
           <table
@@ -361,18 +392,44 @@ export function ResultViewer({ result, table }: Props) {
                   className="corner sticky top-0 left-0 z-20 w-11 min-w-11 cursor-pointer border-r border-b bg-muted"
                   title="Select all"
                 />
-                {result.columns.map((c, i) => (
-                  <th
-                    key={i}
-                    data-c={i}
-                    className={cn(
-                      "sticky top-0 z-10 cursor-pointer border-r border-b bg-muted px-3 py-1.5 text-left font-medium",
-                      fullCols.has(i) && "bg-primary/30",
-                    )}
-                  >
-                    {c}
-                  </th>
-                ))}
+                {result.columns.map((c, i) => {
+                  const sorted = view.sort?.column === i ? view.sort : null;
+                  const SortIcon = sorted ? (sorted.desc ? ArrowDown : ArrowUp) : ArrowUpDown;
+                  return (
+                    <th
+                      key={i}
+                      data-c={i}
+                      className={cn(
+                        "sticky top-0 z-10 cursor-pointer border-r border-b bg-muted px-3 py-1.5 text-left font-medium",
+                        fullCols.has(i) && "bg-primary/30",
+                      )}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        {c}
+                        <button
+                          type="button"
+                          data-nodrag
+                          title={sorted ? (sorted.desc ? "Sorted descending (click to remove)" : "Sorted ascending (click for descending)") : "Sort"}
+                          aria-label={`Sort by ${c}`}
+                          className={cn("rounded p-0.5 hover:bg-accent", sorted ? "text-primary" : "text-muted-foreground opacity-60")}
+                          onClick={() => onViewChange({ ...view, sort: nextSort(view.sort, i) })}
+                        >
+                          <SortIcon className="size-3" />
+                        </button>
+                      </div>
+                      {filtering && (
+                        <Input
+                          data-nodrag
+                          aria-label={`Filter ${c}`}
+                          placeholder="Filter"
+                          value={view.filters[i] ?? ""}
+                          onChange={(e) => onViewChange(withFilter(view, i, e.target.value))}
+                          className="mt-1 h-6 min-w-24 px-1.5 py-0 font-normal md:text-xs"
+                        />
+                      )}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
