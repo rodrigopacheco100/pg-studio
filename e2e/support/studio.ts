@@ -71,7 +71,7 @@ export class Studio {
     await dialog.getByLabel("Host", { exact: true }).fill(DB.host);
     await dialog.getByLabel("Port", { exact: true }).fill(DB.port);
     await dialog.getByLabel("Database", { exact: true }).fill(DB.database);
-    if (c.environment) await dialog.getByLabel("Environment").selectOption({ label: c.environment });
+    if (c.environment) await this.choose(dialog.getByLabel("Environment"), c.environment);
 
     await dialog.getByRole("tab", { name: "Security" }).click();
     await dialog.getByLabel("User", { exact: true }).fill(DB.user);
@@ -85,7 +85,7 @@ export class Studio {
       await dialog.getByLabel("SSH host", { exact: true }).fill(SSH.host);
       await dialog.getByLabel("Port", { exact: true }).fill(SSH.port);
       await dialog.getByLabel("SSH user", { exact: true }).fill(SSH.user);
-      await dialog.getByLabel("Authentication").selectOption({ value: c.ssh.auth });
+      await this.choose(dialog.getByLabel("Authentication"), { key: "Private key", password: "Password", agent: "SSH agent" }[c.ssh.auth]);
       if (c.ssh.auth === "key") await dialog.getByLabel("Private key file").fill(c.ssh.keyPath ?? SSH.plainKey);
       if (c.ssh.auth !== "agent" && c.ssh.secret) {
         await dialog.getByLabel(c.ssh.auth === "key" ? "Key passphrase (if any)" : "SSH password").fill(c.ssh.secret);
@@ -144,6 +144,22 @@ export class Studio {
   /** Closes the open dialog with Escape. */
   async dismissDialog() {
     await this.page.keyboard.press("Escape");
+  }
+
+  /** Opens the dropdown `field` (found by its label) and picks the option named `option`. */
+  async choose(field: Locator, option: string) {
+    await field.click();
+    await this.page.getByRole("option", { name: option, exact: true }).click();
+  }
+
+  /** The value of a CSS variable on the page's root element (e.g. a theme color). */
+  async cssVariable(name: string): Promise<string> {
+    return this.page.evaluate((n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim(), name);
+  }
+
+  /** Waits until the CSS variable `name` on the root element equals `value`. */
+  async expectCssVariable(name: string, value: string) {
+    await expect.poll(() => this.cssVariable(name)).toBe(value);
   }
 
   /** Picks `item` from the menu bar's `menu`. */

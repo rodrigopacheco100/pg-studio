@@ -4,46 +4,31 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KnownHostsList } from "./KnownHostsList";
+import { type Option, OptionSelect } from "./OptionSelect";
+import { ThemeSettings } from "./ThemeSettings";
 import { useSettings } from "../hooks/useSettings";
 import { EDITOR_FONTS, type FontOption, pickFont, UI_FONTS } from "../lib/fonts";
 import type { Settings } from "../types";
 
-const selectClass =
-  "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+/** The settings that are a string or a number (the ones a dropdown can pick). */
+type ChoiceKey = { [K in keyof Settings]: Settings[K] extends string | number ? K : never }[keyof Settings];
 
-interface Choice<V> {
-  value: V;
-  label: string;
-}
-
-const sizes = (values: number[]): Choice<number>[] => values.map((v) => ({ value: v, label: `${v} px` }));
-const seconds = (v: number): Choice<number> => ({ value: v, label: v < 60 ? `${v} s` : `${v / 60} min` });
+const sizes = (values: number[]): Option<number>[] => values.map((v) => ({ value: v, label: `${v} px` }));
+const seconds = (v: number): Option<number> => ({ value: v, label: v < 60 ? `${v} s` : `${v / 60} min` });
 
 /** A labeled dropdown bound to one setting; changes apply and persist immediately. */
-function Field<K extends keyof Settings>({ id, label, setting, choices, hint }: {
+function Field<K extends ChoiceKey>({ id, label, setting, choices, hint }: {
   id: string;
   label: string;
   setting: K;
-  choices: Choice<Settings[K]>[];
+  choices: Option<Settings[K]>[];
   hint?: string;
 }) {
   const { settings, update } = useSettings();
-  const index = Math.max(0, choices.findIndex((c) => c.value === settings[setting]));
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <select
-        id={id}
-        className={selectClass}
-        value={index}
-        onChange={(e) => update({ [setting]: choices[Number(e.target.value)].value } as Partial<Settings>)}
-      >
-        {/* A saved value outside the presets (edited by hand) is kept visible instead of being replaced. */}
-        {!choices.some((c) => c.value === settings[setting]) && (
-          <option value={-1} disabled>{String(settings[setting])}</option>
-        )}
-        {choices.map((c, i) => <option key={i} value={i}>{c.label}</option>)}
-      </select>
+      <OptionSelect id={id} value={settings[setting]} options={choices} onChange={(value) => update({ [setting]: value } as Partial<Settings>)} />
       {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
     </div>
   );
@@ -74,9 +59,7 @@ function FontPicker({ id, label, options, value, onChange, sample }: {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={id}>{label}</Label>
-      <select id={id} className={selectClass} value={current.id} onChange={(e) => onChange(e.target.value)}>
-        {options.map((f) => <option key={f.id} value={f.id}>{f.label}</option>)}
-      </select>
+      <OptionSelect id={id} value={current.id} options={options.map((f) => ({ value: f.id, label: f.label }))} onChange={onChange} />
       <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm" style={{ fontFamily: current.family }}>{sample}</div>
     </div>
   );
@@ -103,12 +86,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </TabsList>
 
           <TabsContent value="appearance" className={pane}>
-            <Field
-              id="theme"
-              label="Theme"
-              setting="theme"
-              choices={[{ value: "dark", label: "Dark" }, { value: "light", label: "Light" }, { value: "system", label: "Follow the system" }]}
-            />
+            <ThemeSettings />
             <FontPicker
               id="ui-font"
               label="Interface font"

@@ -35,7 +35,7 @@ export function EditMenuItems({ canCut, canCopy, canPaste, cut, copy, paste, sel
 }
 
 /** Context menu of a text field. The field is read when the menu opens, not when the field renders. */
-export function FieldMenu({ field }: { field: React.RefObject<HTMLInputElement | null> }) {
+export function FieldMenu({ field }: { field: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null> }) {
   return (
     <ContextMenuContent>
       <FieldMenuItems field={field} />
@@ -44,7 +44,7 @@ export function FieldMenu({ field }: { field: React.RefObject<HTMLInputElement |
 }
 
 /** Mounted only while the menu is open, so selection and read-only state are current. */
-function FieldMenuItems({ field }: { field: React.RefObject<HTMLInputElement | null> }) {
+function FieldMenuItems({ field }: { field: React.RefObject<HTMLInputElement | HTMLTextAreaElement | null> }) {
   const el = field.current;
   const hasSelection = !!el && el.selectionStart !== null && el.selectionStart !== el.selectionEnd;
   const editable = !!el && !el.readOnly && !el.disabled;

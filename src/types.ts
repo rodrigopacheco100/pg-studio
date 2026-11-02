@@ -24,6 +24,12 @@ export interface Conn {
   save_password: boolean;
 }
 
+/** An imported theme as stored: the id is its file name; the content is the JSON the user provided. */
+export interface StoredTheme {
+  id: string;
+  content: string;
+}
+
 export interface KnownHost {
   /** `host:port` of the SSH server. */
   server: string;
@@ -102,7 +108,8 @@ export interface RunInfo {
 export interface Settings {
   sidebarWidth: number;
   editorHeight: number;
-  theme: "dark" | "light" | "system";
+  /** Id of a theme (built-in `dark` / `light`, or an imported one), or `system` to follow the OS. */
+  theme: string;
   /** Font ids from `src/lib/fonts.ts`. */
   uiFont: string;
   editorFont: string;

@@ -16,10 +16,10 @@ Desktop PostgreSQL client. Tauri 2 (Rust) + React 19 + TypeScript + Vite + Tailw
 - `src-tauri/src/state.rs`: `AppState` (stores, active connection, background row count) and the logic commands share: connect/disconnect, SSH routing, reopening a dropped connection, `CmdResult`. Mutex locks never cross an `.await`.
 - `src-tauri/src/storage/`: local SQLite (`pg-studio.sqlite`), one module per table: `connections`, `folders`, `history`, `saved_queries`. Each owns its schema (`init`, including upgrades of older databases) and exposes plain functions taking `&Connection`, used as `connections::list`, `history::add`…
 - `src-tauri/src/pg/`: PostgreSQL access: `connection` (open, cancel), `query` (run, typed results), `error` (error text), `catalog` (tables, details, items).
-- `src-tauri/src/persist/`: `JsonStore<T>`, a value persisted as JSON (atomic writes, defaults on a missing/corrupted file), with `settings` (program settings) and `session` (work in progress) built on it.
+- `src-tauri/src/persist/`: `JsonStore<T>`, a value persisted as JSON (atomic writes, defaults on a missing/corrupted file), with `settings` (program settings) and `session` (work in progress) built on it, and `themes` (imported theme files).
 - `src-tauri/src/secrets.rs`, `tunnel.rs`, `known_hosts.rs`: password storage, the SSH tunnel and its trusted host keys (below).
 - `src/App.tsx`: layout (sidebar + Query/History/Saved tabs + status bar). `QueryView` stays mounted to preserve the editor.
-- `src/hooks/`: UI state (`useConnections`, `useResults`, `useSettings`). `src/components/`, `src/views/`, `src/lib/` (pure utilities, with tests). shadcn components in `src/components/ui/`.
+- `src/hooks/`: UI state (`useConnections`, `useResults`, `useSettings`, `useTheme`). `src/styles/themes/`: built-in theme files. `src/components/`, `src/views/`, `src/lib/` (pure utilities, with tests). shadcn components in `src/components/ui/`.
 - `src/types.ts`: types shared with the backend (serde in camelCase where noted).
 
 ## Program settings (`settings.json`)
@@ -36,7 +36,7 @@ Current settings:
 |---|---|---|
 | `sidebarWidth` | 256 (px) | Sidebar width; limits 180–560 in `Sidebar.tsx` |
 | `editorHeight` | 300 (px) | SQL editor height above the results; minimum 128, maximum 80% of the area (`QueryView.tsx`) |
-| `theme` | `dark` | `dark` / `light` / `system`; `SettingsProvider` toggles the `dark` class on the root (`useSettings().dark`) |
+| `theme` | `dark` | Id of a theme (built-in `dark` / `light` or an imported one) or `system`; see Themes below |
 | `uiFont`, `editorFont` | `roboto`, `system-mono` | Font ids from `UI_FONTS` / `EDITOR_FONTS` in `src/lib/fonts.ts` |
 | `uiFontSize` | 16 (px) | Root font size (Tailwind is rem-based) |
 | `editorFontSize` | 13 (px) | CSS variable `--app-editor-font-size`, read by the CodeMirror theme |
@@ -109,6 +109,12 @@ The webview's native menu is blocked globally (`main.tsx`); every place that nee
 - `AppMenu` (`src/components/AppMenu.tsx`, radix menubar in `ui/menubar.tsx`) is the menu bar: File, Query, Connection, Settings, Help. It only receives callbacks (`MenuActions`); `App` wires them to `useDocuments`, the connections hook and `QueryView`'s handle (`QueryViewHandle`: run, runAtCursor, format, saveQuery). Keyboard shortcuts are handled in `QueryView`; the menu only displays them, so keep both in sync.
 - `SettingsDialog` edits the settings through `useSettings().update`; changes apply and persist immediately.
 - Fonts: the font packages (`@fontsource-variable/*`) are imported in `index.css` and listed in `src/lib/fonts.ts` (`UI_FONTS`, `EDITOR_FONTS`: id, label, CSS family). `SettingsProvider` copies the chosen families into the CSS variables `--app-font-sans` / `--app-font-mono` on the root; Tailwind's `font-sans` / `font-mono` and the CodeMirror theme read those. To offer a new font: add the package import in `index.css` and an entry in `fonts.ts`. An unknown saved id falls back to the first option.
+
+## Themes
+
+A theme is a JSON file `{ name, type: "dark" | "light", colors: { <token>: <css color> } }` (format and tokens in `src/styles/themes/README.md`). The built-in ones (Dark, Light, Dracula, Omni) are `src/styles/themes/*.json`, bundled and ordered by `src/lib/themes.ts` (which also reserves their names; `dark` and `light` are the base that partial themes are completed from; Dracula and Omni follow their official palettes); imported ones are files in the `styles` folder of the app data directory (`persist/themes.rs`, commands `list_themes` / `save_theme` / `delete_theme`; only a slug is accepted as an id, so a file name cannot escape the folder). The backend only stores text; `src/lib/theme.ts` validates it (`parseTheme`: known tokens only, colors checked against a safe pattern since they end up in CSS) and completes a partial theme from the built-in theme of its type (`resolveColors`).
+
+`ThemeProvider` (`hooks/useTheme.tsx`, inside `SettingsProvider`) picks the theme from `settings.theme` (`system` follows the OS between the built-in dark and light), writes its colors to the root as CSS variables and toggles the `dark` class from the theme's `type`; `useTheme().dark` is what the editor uses to choose its syntax highlighting. `index.css` keeps only a first-paint fallback for `--background` / `--foreground`: to change a built-in color edit the JSON, not the CSS. Settings › Appearance (`ThemeSettings`) lists the themes, imports one from pasted text or a file (`ImportThemeDialog`, errors shown inside the dialog), copies the current theme as a template and deletes imported themes.
 
 ## Updates and release notes
 

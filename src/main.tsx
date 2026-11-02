@@ -4,6 +4,7 @@ import { App } from "./App";
 import { DialogsProvider } from "./hooks/useDialogs";
 import { SessionProvider } from "./hooks/useSession";
 import { SettingsProvider } from "./hooks/useSettings";
+import { ThemeProvider } from "./hooks/useTheme";
 import { flushOnClose } from "./lib/persist";
 import "./index.css";
 
@@ -17,9 +18,11 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <DialogsProvider>
       <SettingsProvider>
-        <SessionProvider>
-          <App />
-        </SessionProvider>
+        <ThemeProvider>
+          <SessionProvider>
+            <App />
+          </SessionProvider>
+        </ThemeProvider>
       </SettingsProvider>
     </DialogsProvider>
   </StrictMode>,

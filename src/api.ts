@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Conn, DetailItem, Folder, KnownHost, DetailKind, ItemDetailsMap, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, TableInfo, VaultStatus } from "./types";
+import type { Conn, DetailItem, Folder, KnownHost, DetailKind, ItemDetailsMap, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, StoredTheme, TableInfo, VaultStatus } from "./types";
 
 /** One typed wrapper per Tauri command defined in src-tauri/src/lib.rs. */
 export const api = {
@@ -8,6 +8,9 @@ export const api = {
   saveConnection: (config: Conn) => invoke<number>("save_connection", { config }),
   deleteConnection: (id: number) => invoke<void>("delete_connection", { id }),
   reorderConnections: (items: { id: number; folder_id: number | null }[]) => invoke<void>("reorder_connections", { items }),
+  listThemes: () => invoke<StoredTheme[]>("list_themes"),
+  saveTheme: (id: string, content: string) => invoke<void>("save_theme", { id, content }),
+  deleteTheme: (id: string) => invoke<void>("delete_theme", { id }),
   listKnownHosts: () => invoke<KnownHost[]>("list_known_hosts"),
   forgetKnownHost: (server: string) => invoke<void>("forget_known_host", { server }),
   vaultStatus: () => invoke<VaultStatus>("vault_status"),
@@ -61,6 +64,9 @@ export const files = {
   read: (path: string) => invoke<string>("read_text_file", { path }),
   write: (path: string, content: string) => invoke<void>("write_text_file", { path, content }),
 };
+
+/** A theme JSON file picked by the user; `null` if the dialog was cancelled. */
+export const pickThemeFile = () => open({ multiple: false, filters: [{ name: "Theme", extensions: ["json"] }, { name: "All files", extensions: ["*"] }] });
 
 /** Private key file for the SSH tunnel; `null` if the dialog was cancelled. */
 export const pickKeyFile = () => open({ multiple: false });

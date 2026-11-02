@@ -9,6 +9,7 @@ import { basicSetup } from "codemirror";
 import { useEffect, useImperativeHandle, useRef } from "react";
 import { type FormatOptions, formatSql } from "../lib/formatSql";
 import { useSettings } from "../hooks/useSettings";
+import { useTheme } from "../hooks/useTheme";
 import { statementAtCursor } from "../lib/statements";
 import { useDialogs } from "../hooks/useDialogs";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
@@ -120,7 +121,8 @@ function EditorMenuItems({ view, onRun, onFormat }: { view: React.RefObject<Edit
 
 export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
   const dialogs = useDialogs();
-  const { settings, dark } = useSettings();
+  const { settings } = useSettings();
+  const { dark } = useTheme();
   const appearanceSlot = useRef(new Compartment());
   const indentSlot = useRef(new Compartment());
   const formatOptions = useRef<FormatOptions>(settings);

@@ -1,7 +1,7 @@
 //! Application state shared by the commands.
 
 use crate::pg;
-use crate::persist::{session::Session, settings::Settings, JsonStore};
+use crate::persist::{session::Session, settings::Settings, themes::ThemeFiles, JsonStore};
 use crate::secrets::Secrets;
 use crate::storage::{self, connections::ConnectionConfig};
 use crate::known_hosts::KnownHosts;
@@ -36,6 +36,7 @@ pub struct AppState {
     pub known_hosts: KnownHosts,
     settings: Mutex<JsonStore<Settings>>,
     session: Mutex<JsonStore<Session>>,
+    pub themes: ThemeFiles,
     active: AsyncMutex<Option<Active>>,
     /// Connection of the count in progress; separate from the main one so it never delays the user's queries.
     counting: AsyncMutex<Option<Arc<pg::Session>>>,
@@ -57,6 +58,7 @@ impl AppState {
             known_hosts: KnownHosts::load(dir.join("known_hosts.json")),
             settings: Mutex::new(JsonStore::load(dir.join("settings.json"))),
             session: Mutex::new(JsonStore::load(dir.join("session.json"))),
+            themes: ThemeFiles::open(dir.join("styles"))?,
             active: AsyncMutex::new(None),
             counting: AsyncMutex::new(None),
         };

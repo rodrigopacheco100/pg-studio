@@ -7,7 +7,7 @@ mod state;
 mod storage;
 mod tunnel;
 
-use commands::{connections, files, folders, history, preferences, queries, ssh, vault};
+use commands::{connections, files, folders, history, preferences, queries, ssh, themes, vault};
 use state::AppState;
 use std::path::PathBuf;
 use tauri::{Builder, Emitter, Manager, Runtime};
@@ -46,6 +46,9 @@ pub fn configure<R: Runtime>(builder: Builder<R>, data_dir: Option<PathBuf>) -> 
             folders::rename_folder,
             folders::delete_folder,
             folders::reorder_folders,
+            themes::list_themes,
+            themes::save_theme,
+            themes::delete_theme,
             ssh::list_known_hosts,
             ssh::forget_known_host,
             vault::vault_status,

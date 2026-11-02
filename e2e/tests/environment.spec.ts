@@ -29,8 +29,8 @@ test("the environment survives editing the connection", async ({ studio }) => {
   await studio.connectionRow("editable").getByTitle("Edit").click();
 
   const dialog = studio.dialog("PostgreSQL connection");
-  await expect(dialog.getByLabel("Environment")).toHaveValue("dev");
-  await dialog.getByLabel("Environment").selectOption({ label: "Production" });
+  await expect(dialog.getByLabel("Environment")).toHaveText("Development");
+  await studio.choose(dialog.getByLabel("Environment"), "Production");
   await dialog.getByRole("button", { name: "Save" }).click();
   await expect(studio.connectionRow("editable").getByText("prod", { exact: true })).toBeVisible();
 });

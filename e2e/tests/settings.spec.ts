@@ -6,7 +6,7 @@ test("the theme is applied at once and survives a reload", async ({ studio, page
 
   const saved = page.waitForRequest((r) => r.url().endsWith("/ipc") && (r.postData() ?? "").includes('"set_settings"'));
   const settings = await studio.openSettings("Appearance");
-  await settings.getByLabel("Theme").selectOption({ label: "Light" });
+  await studio.choose(settings.getByLabel("Theme"), "Light");
   await expect(html).not.toHaveClass(/dark/);
   await saved;
 
@@ -20,7 +20,7 @@ test("rows per page decides how many rows a table shows", async ({ studio, page 
 
   const saved = page.waitForRequest((r) => (r.postData() ?? "").includes('"pageSize":25'));
   const settings = await studio.openSettings("Query");
-  await settings.getByLabel("Rows per page").selectOption({ label: "25 rows" });
+  await studio.choose(settings.getByLabel("Rows per page"), "25 rows");
   await saved;
   await studio.dismissDialog();
 
