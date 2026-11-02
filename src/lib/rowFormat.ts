@@ -13,12 +13,32 @@ function uniqueKeys(columns: string[]): string[] {
   });
 }
 
-export function toObjects(columns: string[], rows: Row[]): Record<string, string | null>[] {
-  const keys = uniqueKeys(columns);
-  return rows.map((r) => Object.fromEntries(keys.map((k, i) => [k, r[i] ?? null])));
+const isJsonType = (type: string | undefined) => type === "json" || type === "jsonb";
+
+/** A json/jsonb value as a JSON value rather than a string; kept as text if it does not parse. */
+function parseJson(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 }
 
-export const toJson = (columns: string[], rows: Row[]) => JSON.stringify(toObjects(columns, rows), null, 2);
+/** Rows as objects. `types` (PostgreSQL type name per column, if known) makes json/jsonb columns nested JSON. */
+export function toObjects(columns: string[], rows: Row[], types: string[] = []): Record<string, unknown>[] {
+  const keys = uniqueKeys(columns);
+  return rows.map((r) =>
+    Object.fromEntries(
+      keys.map((k, i) => {
+        const v = r[i] ?? null;
+        return [k, v !== null && isJsonType(types[i]) ? parseJson(v) : v];
+      }),
+    ),
+  );
+}
+
+export const toJson = (columns: string[], rows: Row[], types: string[] = []) =>
+  JSON.stringify(toObjects(columns, rows, types), null, 2);
 
 const csvCell = (v: string | null) => (v === null ? "" : /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
 

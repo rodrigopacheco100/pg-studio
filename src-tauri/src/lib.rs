@@ -113,10 +113,10 @@ async fn refresh_tables(state: State<'_, AppState>) -> CmdResult<Vec<TableInfo>>
 }
 
 #[tauri::command]
-async fn run_query(state: State<'_, AppState>, sql: String) -> CmdResult<QueryOutput> {
+async fn run_query(state: State<'_, AppState>, sql: String, statements: Vec<String>) -> CmdResult<QueryOutput> {
     let client = state.client().await?;
     let start = Instant::now();
-    let outcome = pg::run(&client, &sql).await;
+    let outcome = pg::run_typed(&client, &sql, &statements).await;
     let duration_ms = start.elapsed().as_millis() as u64;
     // A failure to write the history must not hide the query result.
     let _ = state.store(|db| {
