@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { splitStatements } from "./statements";
+import { splitStatements, statementAtCursor } from "./statements";
 
 const texts = (doc: string) => splitStatements(doc).map((r) => doc.slice(r.from, r.to));
 
@@ -21,4 +21,13 @@ test("comentários e ; soltos não são instruções; a instrução começa apó
   const [r] = splitStatements(doc);
   expect(splitStatements(doc)).toHaveLength(1);
   expect(doc.slice(r.from)).toBe("select 1");
+});
+
+test("statementAtCursor escolhe a instrução do cursor, inclusive multilinha", () => {
+  const doc = "select 1;\nselect *\n  from t;\n\nselect 3";
+  expect(statementAtCursor(doc, 3)).toBe("select 1");
+  expect(statementAtCursor(doc, doc.indexOf("from"))).toBe("select *\n  from t");
+  expect(statementAtCursor(doc, doc.indexOf("\n\n") + 1)).toBe("select *\n  from t"); // linha em branco: anterior
+  expect(statementAtCursor(doc, doc.length)).toBe("select 3");
+  expect(statementAtCursor("  ", 1)).toBe("");
 });

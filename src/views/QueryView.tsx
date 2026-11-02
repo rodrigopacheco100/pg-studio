@@ -38,7 +38,7 @@ export function QueryView({ sql, tables, onSqlChange, results }: Props) {
         <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
           <Button size="sm" onClick={() => run(editor.current?.getRunText() ?? "")}><Play /> Executar</Button>
           <Button size="sm" variant="outline" onClick={save}><Save /> Salvar query</Button>
-          <span className="ml-auto text-xs text-muted-foreground">Ctrl+Enter executa · Ctrl+Espaço autocompleta</span>
+          <span className="ml-auto text-xs text-muted-foreground">Ctrl+Enter executa tudo · Ctrl+Shift+Enter executa a query do cursor · Ctrl+Espaço autocompleta</span>
         </div>
         <SqlEditor ref={editor} value={sql} tables={tables} onChange={onSqlChange} onRun={run} />
       </div>

@@ -53,3 +53,10 @@ export function splitStatements(doc: string): StatementRange[] {
   if (from !== -1) out.push({ from, to: trimEnd(doc, doc.length) });
   return out;
 }
+
+/** Instrução sob o cursor; entre duas instruções vale a anterior (ou a primeira, se não houver). */
+export function statementAtCursor(doc: string, pos: number): string {
+  const all = splitStatements(doc);
+  const found = all.find((r) => r.from <= pos && pos <= r.to) ?? all.filter((r) => r.to < pos).pop() ?? all[0];
+  return found ? doc.slice(found.from, found.to) : "";
+}
