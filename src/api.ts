@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Conn, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Settings, TableInfo } from "./types";
 
-/** Um wrapper tipado por comando Tauri definido em src-tauri/src/lib.rs. */
+/** One typed wrapper per Tauri command defined in src-tauri/src/lib.rs. */
 export const api = {
   listConnections: () => invoke<Conn[]>("list_connections"),
   saveConnection: (config: Conn) => invoke<number>("save_connection", { config }),

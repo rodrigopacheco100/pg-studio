@@ -1,10 +1,10 @@
-//! Configurações do programa, persistidas em `settings.json` no diretório de dados do app.
-//! Único dono do arquivo: o restante do backend e o frontend só passam por `SettingsStore`.
+//! Program settings, persisted in `settings.json` in the app data directory.
+//! Sole owner of the file: the rest of the backend and the frontend only go through `SettingsStore`.
 
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-/// Campos ausentes ou inválidos no arquivo caem nos valores padrão.
+/// Missing or invalid fields in the file fall back to the default values.
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Settings {
@@ -24,7 +24,7 @@ pub struct SettingsStore {
 }
 
 impl SettingsStore {
-    /// Um arquivo ausente ou corrompido não impede o app de abrir: usa os padrões.
+    /// A missing or corrupted file does not stop the app from opening: it uses the defaults.
     pub fn load(path: PathBuf) -> Self {
         let current = std::fs::read(&path)
             .ok()
@@ -37,7 +37,7 @@ impl SettingsStore {
         self.current.clone()
     }
 
-    /// Grava em arquivo temporário e renomeia, para uma queda no meio não corromper o JSON.
+    /// Writes to a temporary file and renames it, so a crash midway does not corrupt the JSON.
     pub fn set(&mut self, settings: Settings) -> Result<(), String> {
         if settings == self.current {
             return Ok(());

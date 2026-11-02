@@ -33,8 +33,8 @@ export function Sidebar(p: Props) {
   return (
     <aside className="relative flex min-h-0 flex-col border-r bg-sidebar text-sidebar-foreground">
       <ResizeHandle axis="x" size={settings.sidebarWidth} min={180} max={560} onChange={(sidebarWidth) => update({ sidebarWidth })} />
-      <SectionHeader title="Conexões">
-        <Button variant="ghost" size="icon-xs" title="Nova conexão" onClick={p.onNew}>
+      <SectionHeader title="Connections">
+        <Button variant="ghost" size="icon-xs" title="New connection" onClick={p.onNew}>
           <Plus />
         </Button>
       </SectionHeader>
@@ -51,30 +51,30 @@ export function Sidebar(p: Props) {
             <Database className="size-4 shrink-0" />
             <span className="flex-1 truncate" title={`${c.user}@${c.host}:${c.port}/${c.database}`}>{c.name}</span>
             <span className="hidden gap-0.5 group-hover:flex">
-              <Button variant="ghost" size="icon-xs" title="Editar" onClick={(e) => { e.stopPropagation(); p.onEdit(c); }}>
+              <Button variant="ghost" size="icon-xs" title="Edit" onClick={(e) => { e.stopPropagation(); p.onEdit(c); }}>
                 <Pencil />
               </Button>
-              <Button variant="ghost" size="icon-xs" title="Excluir" onClick={(e) => { e.stopPropagation(); p.onDelete(c); }}>
+              <Button variant="ghost" size="icon-xs" title="Delete" onClick={(e) => { e.stopPropagation(); p.onDelete(c); }}>
                 <Trash2 />
               </Button>
             </span>
           </li>
         ))}
         {p.connections.length === 0 && (
-          <li className="px-2 py-1.5 text-sm text-muted-foreground">Nenhuma conexão. Clique em + para criar.</li>
+          <li className="px-2 py-1.5 text-sm text-muted-foreground">No connections. Click + to create one.</li>
         )}
       </ul>
 
       {p.activeId !== null && (
         <>
           <SectionHeader title="Tabelas">
-            <Button variant="ghost" size="icon-xs" title="Atualizar" onClick={p.onRefreshTables}>
+            <Button variant="ghost" size="icon-xs" title="Refresh" onClick={p.onRefreshTables}>
               <RefreshCw />
             </Button>
           </SectionHeader>
           <ScrollArea className="min-h-0 flex-1">
             <div className="px-1.5 pb-2">
-              {p.tables.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">Sem tabelas.</div>}
+              {p.tables.length === 0 && <div className="px-2 py-1.5 text-sm text-muted-foreground">No tables.</div>}
               {p.tables.map((t) => {
                 const header = t.schema !== lastSchema;
                 lastSchema = t.schema;

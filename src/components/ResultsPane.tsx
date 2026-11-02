@@ -2,12 +2,12 @@ import { useMemo } from "react";
 import { PAGE_SIZE, type ResultsApi } from "../hooks/useResults";
 import { ResultViewer } from "./ResultViewer";
 
-/** Painel único de resultados: mostra a última query ou a tabela aberta. A paginação fica no rodapé. */
+/** Single results pane: shows the last query or the opened table. Pagination lives in the footer. */
 export function ResultsPane({ results }: { results: ResultsApi }) {
   const { outcome, source } = results;
   const table = source.kind === "table" ? source.table : undefined;
 
-  // Tabelas já chegam paginadas do servidor; queries chegam inteiras e são fatiadas aqui.
+  // Tables already arrive paginated from the server; queries arrive whole and are sliced here.
   const visible = useMemo(() => {
     if (outcome?.kind !== "ok") return [];
     if (source.kind === "table") return outcome.results;
@@ -19,16 +19,16 @@ export function ResultsPane({ results }: { results: ResultsApi }) {
   return (
     <div className="min-h-0 flex-1 overflow-auto">
       {outcome === null && (
-        <div className={msg}>Ctrl+Enter executa a query (ou apenas a seleção). Clique numa tabela para ver os dados.</div>
+        <div className={msg}>Ctrl+Enter runs the query (or just the selection). Click a table to see its data.</div>
       )}
-      {outcome?.kind === "running" && <div className={msg}>Executando…</div>}
+      {outcome?.kind === "running" && <div className={msg}>Running…</div>}
       {outcome?.kind === "error" && (
         <div className="selectable p-4 text-sm whitespace-pre-wrap text-destructive">{outcome.message}</div>
       )}
       {outcome?.kind === "ok" && (
         <>
           {visible.map((r, i) => <ResultViewer key={i} result={r} table={table} />)}
-          {visible.length === 0 && <div className={msg}>Sem resultados.</div>}
+          {visible.length === 0 && <div className={msg}>No results.</div>}
         </>
       )}
     </div>

@@ -17,7 +17,7 @@ describe("makeAlias", () => {
 });
 
 describe("parseRefs", () => {
-  test("lê tabelas, schema e apelidos", () => {
+  test("reads tables, schema and aliases", () => {
     const refs = parseRefs(
       `select * from "Class" cl join school.teacher as t on t.id = cl.id left join student where 1=1`,
       tables,
@@ -28,17 +28,17 @@ describe("parseRefs", () => {
       ["student", null],
     ]);
   });
-  test("palavra reservada não é apelido", () => {
+  test("reserved word is not an alias", () => {
     expect(parseRefs("select * from student where id = 1", tables)[0].alias).toBeNull();
   });
 });
 
-test("statementAt isola a instrução do cursor", () => {
+test("statementAt isolates the statement at the cursor", () => {
   const doc = "select 1; select 2; select 3";
   expect(statementAt(doc, 14).text.trim()).toBe("select 2");
 });
 
-test("quoteIdent coloca aspas só quando necessário", () => {
+test("quoteIdent quotes only when necessary", () => {
   expect(quoteIdent("name")).toBe("name");
   expect(quoteIdent("Class")).toBe('"Class"');
   expect(quoteIdent("user")).toBe('"user"');

@@ -1,7 +1,7 @@
 export interface StatementRange {
-  /** Primeiro caractere significativo (sem espaços nem comentários antes). */
+  /** First significant character (no leading whitespace or comments). */
   from: number;
-  /** Fim exclusivo, antes do `;` que encerra a instrução. */
+  /** Exclusive end, before the `;` that terminates the statement. */
   to: number;
 }
 
@@ -11,8 +11,8 @@ function trimEnd(doc: string, end: number) {
 }
 
 /**
- * Instruções de um script, separadas por `;` fora de strings, identificadores entre aspas,
- * comentários (`--`, `/* *​/`) e blocos `$tag$…$tag$`. Trechos só de comentário não contam.
+ * Statements of a script, separated by `;` outside strings, quoted identifiers,
+ * comments (`--`, `/* *​/`) and `$tag$…$tag$` blocks. Comment-only chunks do not count.
  */
 export function splitStatements(doc: string): StatementRange[] {
   const out: StatementRange[] = [];
@@ -38,7 +38,7 @@ export function splitStatements(doc: string): StatementRange[] {
       if (from === -1) from = i;
       if (c === "'" || c === '"') {
         i++;
-        // Aspas duplicadas dentro do literal são escape, não fechamento.
+        // Doubled quotes inside the literal are an escape, not a closing quote.
         while (i < doc.length && !(doc[i] === c && doc[i + 1] !== c)) i += doc[i] === c ? 2 : 1;
         i++;
       } else if (c === "$") {
@@ -54,7 +54,7 @@ export function splitStatements(doc: string): StatementRange[] {
   return out;
 }
 
-/** Instrução sob o cursor; entre duas instruções vale a anterior (ou a primeira, se não houver). */
+/** Statement under the cursor; between two statements the previous one counts (or the first, if there is none). */
 export function statementAtCursor(doc: string, pos: number): string {
   const all = splitStatements(doc);
   const found = all.find((r) => r.from <= pos && pos <= r.to) ?? all.filter((r) => r.to < pos).pop() ?? all[0];

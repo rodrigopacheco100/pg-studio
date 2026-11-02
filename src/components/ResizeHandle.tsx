@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 interface Props {
-  /** `x` redimensiona a largura (alça vertical), `y` a altura (alça horizontal). */
+  /** `x` resizes the width (vertical handle), `y` the height (horizontal handle). */
   axis: "x" | "y";
   size: number;
   min: number;
@@ -9,14 +9,14 @@ interface Props {
   onChange: (size: number) => void;
 }
 
-/** Alça arrastável posicionada na borda direita/inferior do pai (que precisa ser `relative`). */
+/** Draggable handle placed on the parent's right/bottom edge (the parent must be `relative`). */
 export function ResizeHandle({ axis, size, min, max = Infinity, onChange }: Props) {
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     const el = e.currentTarget;
     const start = axis === "x" ? e.clientX : e.clientY;
     const startSize = size;
     el.setPointerCapture(e.pointerId);
-    // Sem isso o arraste seleciona o texto (ex.: o do editor) por onde o ponteiro passa.
+    // Without this the drag selects the text (e.g. the editor's) the pointer passes over.
     e.preventDefault();
     document.body.style.userSelect = "none";
     const move = (ev: PointerEvent) => {

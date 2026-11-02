@@ -14,7 +14,7 @@ use tokio_postgres::Client;
 
 type CmdResult<T> = Result<T, String>;
 
-/// Conexão ativa e a configuração usada para abri-la (a contagem em segundo plano reabre uma própria).
+/// Active connection and the config used to open it (the background count opens its own).
 struct Active {
     client: Arc<Client>,
     config: ConnectionConfig,
@@ -25,32 +25,32 @@ struct AppState {
     store: Mutex<rusqlite::Connection>,
     settings: Mutex<SettingsStore>,
     active: AsyncMutex<Option<Active>>,
-    /// Conexão da contagem em andamento; separada da principal para nunca atrasar as queries do usuário.
+    /// Connection of the count in progress; separate from the main one so it never delays the user's queries.
     counting: AsyncMutex<Option<Arc<pg::Session>>>,
 }
 
 impl AppState {
-    /// Executa `f` com o SQLite local. O lock nunca atravessa um `.await`.
+    /// Runs `f` with the local SQLite. The lock never crosses an `.await`.
     fn store<T>(&self, f: impl FnOnce(&rusqlite::Connection) -> rusqlite::Result<T>) -> CmdResult<T> {
         let db = self.store.lock().map_err(|e| e.to_string())?;
         f(&db).map_err(|e| e.to_string())
     }
 
-    /// Conexão principal. Se ela já foi detectada como fechada, reabre antes de devolver; nada foi
-    /// enviado ainda, então não há risco de repetir uma instrução. Uma queda no meio de uma query
-    /// vira erro, e o próximo comando reconecta.
+    /// Main connection. If it was already detected as closed, reopens it before returning; nothing was
+    /// sent yet, so there is no risk of repeating a statement. A drop in the middle of a query
+    /// becomes an error, and the next command reconnects.
     async fn client(&self) -> CmdResult<Arc<Client>> {
         let mut guard = self.active.lock().await;
-        let active = guard.as_mut().ok_or_else(|| "Não conectado".to_string())?;
+        let active = guard.as_mut().ok_or_else(|| "Not connected".to_string())?;
         if active.client.is_closed() {
             active.client = Arc::new(pg::open(&active.config).await?.client);
-            // A sessão nova perdeu transações abertas, SET, tabelas temporárias etc.
+            // The new session lost open transactions, SET, temporary tables, etc.
             let _ = self.app.emit("connection-restored", ());
         }
         Ok(active.client.clone())
     }
 
-    /// Interrompe, sem esperar, a contagem em andamento (se houver).
+    /// Interrupts, without waiting, the count in progress (if any).
     async fn cancel_counting(&self) {
         if let Some(session) = self.counting.lock().await.take() {
             tauri::async_runtime::spawn(async move { session.cancel().await });
@@ -113,7 +113,7 @@ async fn run_query(state: State<'_, AppState>, sql: String) -> CmdResult<QueryOu
     let start = Instant::now();
     let outcome = pg::run(&client, &sql).await;
     let duration_ms = start.elapsed().as_millis() as u64;
-    // Falha ao gravar o histórico não deve esconder o resultado da query.
+    // A failure to write the history must not hide the query result.
     let _ = state.store(|db| {
         local::add_history(db, &sql, duration_ms as i64, outcome.as_ref().err().map(String::as_str))
     });
@@ -136,10 +136,10 @@ async fn table_data(
 async fn table_count(state: State<'_, AppState>, schema: String, table: String) -> CmdResult<u64> {
     let config = {
         let active = state.active.lock().await;
-        active.as_ref().map(|a| a.config.clone()).ok_or_else(|| "Não conectado".to_string())?
+        active.as_ref().map(|a| a.config.clone()).ok_or_else(|| "Not connected".to_string())?
     };
-    // Conexão própria: o servidor atende uma query por vez por conexão, então contar numa
-    // conexão compartilhada seguraria as queries do usuário até o fim do count(*).
+    // Own connection: the server handles one query at a time per connection, so counting on a
+    // shared connection would hold up the user's queries until count(*) finishes.
     let session = Arc::new(pg::open(&config).await?);
     if let Some(previous) = state.counting.lock().await.replace(session.clone()) {
         tauri::async_runtime::spawn(async move { previous.cancel().await });
@@ -149,7 +149,7 @@ async fn table_count(state: State<'_, AppState>, schema: String, table: String) 
 
     let mut counting = state.counting.lock().await;
     if counting.as_ref().is_some_and(|c| Arc::ptr_eq(c, &session)) {
-        *counting = None; // terminou: libera a conexão
+        *counting = None; // done: release the connection
     }
     total
 }
@@ -219,5 +219,5 @@ pub fn run() {
             set_settings,
         ])
         .run(tauri::generate_context!())
-        .expect("erro ao iniciar o PG Studio");
+        .expect("error starting PG Studio");
 }

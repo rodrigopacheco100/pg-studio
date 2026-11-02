@@ -12,7 +12,7 @@ export function SavedView({ onUse }: { onUse: (sql: string) => void }) {
 
   return (
     <ScrollArea className="min-h-0 flex-1">
-      {items.length === 0 && <div className="p-4 text-sm text-muted-foreground">Nenhuma query salva.</div>}
+      {items.length === 0 && <div className="p-4 text-sm text-muted-foreground">No saved queries.</div>}
       {items.map((q) => (
         <div key={q.id} className="flex items-start gap-3 border-b px-4 py-2 hover:bg-muted/50">
           <div className="min-w-0 flex-1">
@@ -24,7 +24,7 @@ export function SavedView({ onUse }: { onUse: (sql: string) => void }) {
               {q.sql}
             </pre>
           </div>
-          <Button variant="ghost" size="icon-xs" title="Excluir" onClick={() => api.deleteSavedQuery(q.id!).then(load)}>
+          <Button variant="ghost" size="icon-xs" title="Delete" onClick={() => api.deleteSavedQuery(q.id!).then(load)}>
             <Trash2 />
           </Button>
         </div>

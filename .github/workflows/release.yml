@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: Tipo de versão
+        description: Version type
         type: choice
         options: [patch, minor, major]
         default: patch
@@ -15,7 +15,7 @@ permissions:
 concurrency: release
 
 jobs:
-  # Sobe a versão, commita em main, cria a tag e o release com os commits
+  # Bumps the version, commits to main, creates the tag and the release with the commits
   # desde a release anterior.
   prepare:
     if: github.ref == 'refs/heads/main'
@@ -58,10 +58,10 @@ jobs:
           last=$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null || true)
           range=${last:+$last..HEAD}
           {
-            echo "## O que mudou"
+            echo "## What changed"
             echo
             git log $range --no-merges --pretty='- %s (%h)'
-            [ -n "$last" ] && echo && echo "**Comparação completa:** https://github.com/${{ github.repository }}/compare/$last...$TAG"
+            [ -n "$last" ] && echo && echo "**Full comparison:** https://github.com/${{ github.repository }}/compare/$last...$TAG"
           } > "$RUNNER_TEMP/notes.md"
           cat "$RUNNER_TEMP/notes.md"
 
