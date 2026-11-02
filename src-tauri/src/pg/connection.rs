@@ -43,7 +43,7 @@ pub async fn open(c: &ConnectionConfig) -> Result<Session, String> {
             .build()
             .map_err(|e| e.to_string())?;
         let tls = MakeTlsConnector::new(tls);
-        let (client, conn) = cfg.connect(tls.clone()).await.map_err(|e| e.to_string())?;
+        let (client, conn) = cfg.connect(tls.clone()).await.map_err(|e| error_text(&e, None))?;
         tauri::async_runtime::spawn(async move {
             let _ = conn.await;
         });
