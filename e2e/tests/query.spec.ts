@@ -49,3 +49,22 @@ test("a DELETE with WHERE runs without asking", async ({ studio }) => {
   await studio.run(`select count(*) as remaining from ${table}`);
   await expect(studio.cells.filter({ hasText: /^1$/ })).toBeVisible();
 });
+
+test("asks before a data-modifying CTE without WHERE and before ALTER ... DROP", async ({ studio }) => {
+  const table = `scratch_${randomUUID().slice(0, 8)}`;
+  await studio.newConnection({ name: "q" });
+  await studio.connect("q");
+  await studio.run(`create table ${table} (n int, extra int); insert into ${table} values (1, 1), (2, 2);`);
+  const confirm = studio.dialog("Run destructive statements?");
+
+  await studio.run(`with gone as (delete from ${table} returning n) select * from gone`);
+  await expect(confirm).toContainText("DELETE without WHERE");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+
+  await studio.run(`alter table ${table} drop column extra`);
+  await expect(confirm).toContainText("ALTER ... DROP");
+  await confirm.getByRole("button", { name: "Cancel" }).click();
+
+  await studio.run(`alter table ${table} alter column extra drop not null`);
+  await expect(confirm).toBeHidden();
+});

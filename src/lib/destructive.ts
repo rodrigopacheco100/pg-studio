@@ -49,27 +49,53 @@ function words(sql: string): Word[] {
   return out;
 }
 
-/** The reason a single statement is risky, or `null`. */
-function risk(sql: string): string | null {
-  const ws = words(sql);
-  const first = ws[0]?.text;
-  if (first === "DROP" || first === "TRUNCATE") return first;
-  // `WITH ... DELETE/UPDATE`: the verb is the first one outside the CTE parentheses.
-  const verb = first === "WITH" ? ws.find((w) => w.depth === 0 && (w.text === "DELETE" || w.text === "UPDATE")) : ws[0];
-  if (verb?.text !== "DELETE" && verb?.text !== "UPDATE") return null;
-  const rest = ws.slice(ws.indexOf(verb) + 1);
-  return rest.some((w) => w.depth === 0 && w.text === "WHERE") ? null : `${verb.text} without WHERE`;
+/** Is there no `WHERE`, at the depth of the DELETE/UPDATE at `ws[i]`, before its statement (or CTE body) ends? */
+function unfiltered(ws: Word[], i: number): boolean {
+  const { depth } = ws[i];
+  for (let j = i + 1; j < ws.length && ws[j].depth >= depth; j++) {
+    if (ws[j].depth === depth && ws[j].text === "WHERE") return false;
+  }
+  return true;
 }
 
-/** The statements of `sql` that destroy data: `DROP`, `TRUNCATE`, and `DELETE` / `UPDATE` without `WHERE`. */
+/**
+ * Does the DELETE/UPDATE at `ws[i]` start a statement? That is the first word, the first word of a
+ * data-modifying CTE body (`WITH x AS (DELETE ...)`: it opens a deeper level), or the main verb after
+ * the CTEs. Not the `ON DELETE` of a constraint or the `DO UPDATE` of an upsert.
+ */
+function isVerb(ws: Word[], i: number): boolean {
+  const w = ws[i];
+  if (w.text !== "DELETE" && w.text !== "UPDATE") return false;
+  if (i === 0 || ws[i - 1].depth < w.depth) return true;
+  return ws[0].text === "WITH" && w.depth === 0 && !ws.slice(0, i).some((x) => x.depth === 0 && /^(SELECT|INSERT|DELETE|UPDATE)$/.test(x.text));
+}
+
+/** The reasons a single statement is risky. */
+function risks(sql: string): string[] {
+  const ws = words(sql);
+  const first = ws[0]?.text;
+  if (first === "DROP" || first === "TRUNCATE") return [first];
+  // `ALTER TABLE ... DROP COLUMN / CONSTRAINT`: anything but the harmless `DROP DEFAULT` / `DROP NOT NULL`.
+  if (first === "ALTER") {
+    const drops = ws.filter((w, i) => w.depth === 0 && w.text === "DROP" && !/^(DEFAULT|NOT|EXPRESSION|IDENTITY)$/.test(ws[i + 1]?.text ?? ""));
+    return drops.length > 0 ? ["ALTER ... DROP"] : [];
+  }
+  // DELETE/UPDATE: the statement itself, or the body of a data-modifying CTE (`WITH x AS (DELETE ...)`).
+  const out: string[] = [];
+  ws.forEach((w, i) => {
+    if (isVerb(ws, i) && unfiltered(ws, i)) out.push(`${w.text} without WHERE`);
+  });
+  return out;
+}
+
+/** The statements of `sql` that destroy data: `DROP`, `TRUNCATE`, `ALTER ... DROP`, and `DELETE` / `UPDATE` without `WHERE` (also inside a CTE). */
 export function destructiveStatements(sql: string): Destructive[] {
   const found: Destructive[] = [];
   for (const { from, to } of splitStatements(sql)) {
     const statement = sql.slice(from, to);
-    const reason = risk(statement);
-    if (!reason) continue;
     const oneLine = statement.replace(/\s+/g, " ");
-    found.push({ reason, sql: oneLine.length > 80 ? `${oneLine.slice(0, 80)}…` : oneLine });
+    const sql80 = oneLine.length > 80 ? `${oneLine.slice(0, 80)}…` : oneLine;
+    for (const reason of risks(statement)) found.push({ reason, sql: sql80 });
   }
   return found;
 }
