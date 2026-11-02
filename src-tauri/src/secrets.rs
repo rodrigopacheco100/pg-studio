@@ -1,0 +1,193 @@
+//! Connection passwords. Stored in the OS credential store when there is one; otherwise in `vault.json`,
+//! encrypted with a key derived from a master password (Argon2id + ChaCha20-Poly1305). The derived key
+//! only lives in memory, after `create` / `unlock`.
+
+use crate::json_store::JsonStore;
+use argon2::Argon2;
+use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use chacha20poly1305::{aead::Aead, ChaCha20Poly1305, Key, KeyInit, Nonce};
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use std::sync::{Mutex, OnceLock};
+
+const KEYRING_SERVICE: &str = "pg-studio";
+/// Encrypted with the key when the vault is created; decrypting it proves the master password.
+const CHECK: &[u8] = b"pg-studio-vault";
+
+#[cfg(any(target_os = "linux", target_os = "macos", target_os = "windows"))]
+mod keychain {
+    fn entry(name: &str) -> Result<keyring::Entry, String> {
+        keyring::Entry::new(super::KEYRING_SERVICE, name).map_err(|e| e.to_string())
+    }
+    pub fn get(id: i64) -> Option<String> {
+        entry(&format!("connection-{id}")).ok()?.get_password().ok()
+    }
+    pub fn set(id: i64, password: &str) -> Result<(), String> {
+        entry(&format!("connection-{id}"))?
+            .set_password(password)
+            .map_err(|e| format!("Could not store the password in the system keychain: {e}"))
+    }
+    pub fn remove(id: i64) {
+        if let Ok(e) = entry(&format!("connection-{id}")) {
+            let _ = e.delete_credential();
+        }
+    }
+    /// Writes and deletes a throwaway credential; fails where no credential store is running.
+    pub fn probe() -> Result<(), String> {
+        let e = entry("probe")?;
+        e.set_password("probe").map_err(|e| e.to_string())?;
+        let _ = e.delete_credential();
+        Ok(())
+    }
+}
+#[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+mod keychain {
+    pub fn get(_: i64) -> Option<String> { None }
+    pub fn set(_: i64, _: &str) -> Result<(), String> { Err("No system keychain on this platform".into()) }
+    pub fn remove(_: i64) {}
+    pub fn probe() -> Result<(), String> { Err("No system keychain on this platform".into()) }
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq, Default)]
+pub struct VaultFile {
+    /// Base64 salt of the key derivation; empty = vault not created yet.
+    salt: String,
+    check: String,
+    /// Connection id -> base64(nonce || ciphertext).
+    entries: BTreeMap<String, String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Status {
+    /// `None` when the system keychain works, otherwise why it does not.
+    keychain_problem: Option<String>,
+    /// `none` (not created), `locked` or `unlocked`; only meaningful without a keychain.
+    vault: &'static str,
+}
+
+pub struct Secrets {
+    keychain: OnceLock<Option<String>>,
+    file: Mutex<JsonStore<VaultFile>>,
+    key: Mutex<Option<[u8; 32]>>,
+}
+
+impl Secrets {
+    pub fn load(path: PathBuf) -> Self {
+        Self { keychain: OnceLock::new(), file: Mutex::new(JsonStore::load(path)), key: Mutex::new(None) }
+    }
+
+    /// Probed once per run.
+    fn keychain_problem(&self) -> Option<String> {
+        self.keychain.get_or_init(|| keychain::probe().err()).clone()
+    }
+
+    pub fn status(&self) -> Status {
+        let vault = if self.file.lock().unwrap().get().salt.is_empty() {
+            "none"
+        } else if self.key.lock().unwrap().is_some() {
+            "unlocked"
+        } else {
+            "locked"
+        };
+        Status { keychain_problem: self.keychain_problem(), vault }
+    }
+
+    pub fn get(&self, id: i64) -> Option<String> {
+        if self.keychain_problem().is_none() {
+            return keychain::get(id);
+        }
+        let key = (*self.key.lock().unwrap())?;
+        let blob = self.file.lock().unwrap().get().entries.get(&id.to_string())?.clone();
+        decrypt(&key, &blob).and_then(|b| String::from_utf8(b).ok())
+    }
+
+    pub fn set(&self, id: i64, password: &str) -> Result<(), String> {
+        if self.keychain_problem().is_none() {
+            return keychain::set(id, password);
+        }
+        let key = (*self.key.lock().unwrap()).ok_or("The password vault is locked")?;
+        let mut file = self.file.lock().unwrap();
+        let mut value = file.get();
+        value.entries.insert(id.to_string(), encrypt(&key, password.as_bytes())?);
+        file.set(value)
+    }
+
+    pub fn remove(&self, id: i64) {
+        if self.keychain_problem().is_none() {
+            keychain::remove(id);
+        }
+        let mut file = self.file.lock().unwrap();
+        let mut value = file.get();
+        if value.entries.remove(&id.to_string()).is_some() {
+            let _ = file.set(value);
+        }
+    }
+
+    /// First use without a keychain: sets the master password and leaves the vault unlocked.
+    pub fn create(&self, master: &str) -> Result<(), String> {
+        if master.is_empty() {
+            return Err("The master password cannot be empty".into());
+        }
+        let mut file = self.file.lock().unwrap();
+        if !file.get().salt.is_empty() {
+            return Err("The vault already exists".into());
+        }
+        let mut salt = [0u8; 16];
+        getrandom::getrandom(&mut salt).map_err(|e| e.to_string())?;
+        let key = derive(master, &salt)?;
+        file.set(VaultFile { salt: B64.encode(salt), check: encrypt(&key, CHECK)?, entries: BTreeMap::new() })?;
+        *self.key.lock().unwrap() = Some(key);
+        Ok(())
+    }
+
+    pub fn unlock(&self, master: &str) -> Result<(), String> {
+        let value = self.file.lock().unwrap().get();
+        let salt = B64.decode(&value.salt).map_err(|_| "The vault has not been created")?;
+        let key = derive(master, &salt)?;
+        if decrypt(&key, &value.check).as_deref() != Some(CHECK) {
+            return Err("Wrong master password".into());
+        }
+        *self.key.lock().unwrap() = Some(key);
+        Ok(())
+    }
+}
+
+fn derive(master: &str, salt: &[u8]) -> Result<[u8; 32], String> {
+    let mut key = [0u8; 32];
+    Argon2::default().hash_password_into(master.as_bytes(), salt, &mut key).map_err(|e| e.to_string())?;
+    Ok(key)
+}
+
+fn encrypt(key: &[u8; 32], plain: &[u8]) -> Result<String, String> {
+    let mut nonce = [0u8; 12];
+    getrandom::getrandom(&mut nonce).map_err(|e| e.to_string())?;
+    let cipher = ChaCha20Poly1305::new(Key::from_slice(key));
+    let mut blob = nonce.to_vec();
+    blob.extend(cipher.encrypt(Nonce::from_slice(&nonce), plain).map_err(|e| e.to_string())?);
+    Ok(B64.encode(blob))
+}
+
+fn decrypt(key: &[u8; 32], blob: &str) -> Option<Vec<u8>> {
+    let blob = B64.decode(blob).ok()?;
+    if blob.len() < 12 {
+        return None;
+    }
+    let (nonce, cipher_text) = blob.split_at(12);
+    ChaCha20Poly1305::new(Key::from_slice(key)).decrypt(Nonce::from_slice(nonce), cipher_text).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn encrypts_and_rejects_wrong_key() {
+        let key = derive("master", b"0123456789abcdef").unwrap();
+        let blob = encrypt(&key, b"secret").unwrap();
+        assert_eq!(decrypt(&key, &blob).as_deref(), Some(&b"secret"[..]));
+        let other = derive("other", b"0123456789abcdef").unwrap();
+        assert!(decrypt(&other, &blob).is_none());
+    }
+}

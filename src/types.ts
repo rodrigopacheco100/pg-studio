@@ -9,6 +9,15 @@ export interface Conn {
   ssl: boolean;
   /** Folder the connection is filed under; `null` = top level. */
   folder_id: number | null;
+  /** When false the password is not stored and is asked on every connect. */
+  save_password: boolean;
+}
+
+export interface VaultStatus {
+  /** `null` when the system keychain works, otherwise why it does not. */
+  keychainProblem: string | null;
+  /** Encrypted vault used instead of the keychain; `none` = no master password yet. */
+  vault: "none" | "locked" | "unlocked";
 }
 
 export interface Folder {

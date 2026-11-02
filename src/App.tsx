@@ -8,6 +8,7 @@ import { ConnectionDialog } from "./components/ConnectionDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { errText } from "./api";
+import { useVault } from "./hooks/useVault";
 import { useConnections } from "./hooks/useConnections";
 import { useSession } from "./hooks/useSession";
 import { useSettings } from "./hooks/useSettings";
@@ -24,6 +25,7 @@ type View = "query" | "history" | "saved";
 export function App() {
   const dialogs = useDialogs();
   const session = useSession();
+  const ensureVault = useVault();
   const ws = useConnections(session.initial.connectionId);
   const results = useResults();
   const [view, setView] = useState<View>("query");
@@ -63,7 +65,17 @@ export function App() {
   async function toggle(c: Conn) {
     try {
       if (c.id === ws.activeId) await ws.disconnect();
-      else await ws.connect(c.id!);
+      else {
+        let password: string | undefined;
+        if (c.save_password) {
+          if (!(await ensureVault())) return;
+        } else {
+          const typed = await dialogs.prompt(`Password for ${c.user}@${c.host}`, c.name, { secret: true });
+          if (typed === null) return;
+          password = typed;
+        }
+        await ws.connect(c.id!, password);
+      }
       session.update({ connectionId: ws.activeId === c.id ? null : c.id });
       resetWorkspace();
     } catch (e) {

@@ -1,6 +1,6 @@
 import type { Conn } from "../types";
 
-export type ConnFields = Omit<Conn, "id" | "name" | "folder_id">;
+export type ConnFields = Omit<Conn, "id" | "name" | "folder_id" | "save_password">;
 
 /** Converts postgres://user:password@host:port/database?sslmode=require into the fields of a connection. */
 export function parseConnUrl(raw: string): ConnFields {

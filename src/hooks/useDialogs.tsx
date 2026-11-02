@@ -2,19 +2,20 @@ import { createContext, useContext, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "../components/PasswordInput";
 
 interface DialogsApi {
   /** Resolves `true` when confirmed, `false` when cancelled or dismissed. */
   confirm: (message: string, options?: { title?: string; confirmLabel?: string }) => Promise<boolean>;
   alert: (message: string, title?: string) => Promise<void>;
   /** Resolves the entered text, or `null` when cancelled or dismissed. */
-  prompt: (label: string, title?: string) => Promise<string | null>;
+  prompt: (label: string, title?: string, options?: { secret?: boolean }) => Promise<string | null>;
 }
 
 type Request =
   | { kind: "confirm"; title: string; message: string; confirmLabel: string; resolve: (ok: boolean) => void }
   | { kind: "alert"; title: string; message: string; resolve: () => void }
-  | { kind: "prompt"; title: string; message: string; resolve: (value: string | null) => void };
+  | { kind: "prompt"; title: string; message: string; secret: boolean; resolve: (value: string | null) => void };
 
 const DialogsContext = createContext<DialogsApi | null>(null);
 
@@ -40,7 +41,7 @@ export function DialogsProvider({ children }: { children: React.ReactNode }) {
       confirm: (message, options) =>
         open<boolean>((resolve) => ({ kind: "confirm", title: options?.title ?? "Confirm", message, confirmLabel: options?.confirmLabel ?? "OK", resolve })),
       alert: (message, title = "Error") => open<void>((resolve) => ({ kind: "alert", title, message, resolve })),
-      prompt: (label, title = "Input") => open<string | null>((resolve) => ({ kind: "prompt", title, message: label, resolve })),
+      prompt: (label, title = "Input", options) => open<string | null>((resolve) => ({ kind: "prompt", title, message: label, secret: options?.secret === true, resolve })),
     };
   }, []);
 
@@ -64,7 +65,9 @@ export function DialogsProvider({ children }: { children: React.ReactNode }) {
             </DialogHeader>
             {request.kind === "prompt" && (
               <form id="prompt-form" onSubmit={(e) => { e.preventDefault(); close(text); }}>
-                <Input autoFocus value={text} onChange={(e) => setText(e.target.value)} />
+                {request.secret
+                  ? <PasswordInput autoFocus value={text} onChange={(e) => setText(e.target.value)} />
+                  : <Input autoFocus value={text} onChange={(e) => setText(e.target.value)} />}
               </form>
             )}
             <DialogFooter>

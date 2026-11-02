@@ -1,5 +1,6 @@
 //! Local storage (SQLite): saved connections, history and saved queries.
 
+use crate::secrets::Secrets;
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -12,11 +13,20 @@ pub struct ConnectionConfig {
     pub port: u16,
     pub database: String,
     pub user: String,
+    /// Never stored in SQLite: it lives in the secret store (see `secrets.rs`). Lists leave it
+    /// empty; on save, empty means "keep the stored one".
     pub password: String,
     pub ssl: bool,
+    /// When false the password is not kept anywhere and is asked on every connect.
+    #[serde(default = "yes")]
+    pub save_password: bool,
     /// Folder the connection is filed under; `None` = top level. Not touched by `save_connection` on update (see `reorder_connections`).
     #[serde(default)]
     pub folder_id: Option<i64>,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Serialize)]
@@ -92,23 +102,51 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     if !has("position")? {
         db.execute("ALTER TABLE connections ADD COLUMN position INTEGER NOT NULL DEFAULT 0", [])?;
     }
+    if !has("save_password")? {
+        db.execute("ALTER TABLE connections ADD COLUMN save_password INTEGER NOT NULL DEFAULT 1", [])?;
+    }
     Ok(db)
+}
+
+/// Moves passwords left in SQLite by older versions into the secret store. A row is only cleared once
+/// the store accepted it, so while it cannot (no keychain and the vault locked) the password stays
+/// where it was and keeps working, see `get_connection`. Runs at startup and after the vault is unlocked.
+pub fn migrate_passwords(db: &Connection, secrets: &Secrets) -> rusqlite::Result<()> {
+    let mut stmt = db.prepare("SELECT id, password FROM connections WHERE password <> ''")?;
+    let legacy: Vec<(i64, String)> = stmt.query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?.collect::<Result<_, _>>()?;
+    for (id, password) in legacy {
+        if secrets.set(id, &password).is_ok() {
+            db.execute("UPDATE connections SET password = '' WHERE id = ?1", [id])?;
+        }
+    }
+    Ok(())
 }
 
 pub fn list_connections(db: &Connection) -> rusqlite::Result<Vec<ConnectionConfig>> {
     let mut stmt = db.prepare(
-        "SELECT id, name, host, port, database, user, password, ssl, folder_id FROM connections ORDER BY position, name, id",
+        "SELECT id, name, host, port, database, user, password, ssl, folder_id, save_password FROM connections ORDER BY position, name, id",
     )?;
-    let rows = stmt.query_map([], row_to_connection)?;
+    let rows = stmt.query_map([], |r| {
+        let mut c = row_to_connection(r)?;
+        c.password.clear(); // secrets never reach the frontend
+        Ok(c)
+    })?;
     rows.collect()
 }
 
-pub fn get_connection(db: &Connection, id: i64) -> rusqlite::Result<ConnectionConfig> {
-    db.query_row(
-        "SELECT id, name, host, port, database, user, password, ssl, folder_id FROM connections WHERE id = ?1",
+/// With its password: from the secret store, or from SQLite for rows an older version left there.
+pub fn get_connection(db: &Connection, secrets: &Secrets, id: i64) -> rusqlite::Result<ConnectionConfig> {
+    let mut c = db.query_row(
+        "SELECT id, name, host, port, database, user, password, ssl, folder_id, save_password FROM connections WHERE id = ?1",
         [id],
         row_to_connection,
-    )
+    )?;
+    if !c.save_password {
+        c.password.clear();
+    } else if let Some(p) = secrets.get(id) {
+        c.password = p;
+    }
+    Ok(c)
 }
 
 fn row_to_connection(r: &rusqlite::Row) -> rusqlite::Result<ConnectionConfig> {
@@ -122,31 +160,51 @@ fn row_to_connection(r: &rusqlite::Row) -> rusqlite::Result<ConnectionConfig> {
         password: r.get(6)?,
         ssl: r.get::<_, i64>(7)? != 0,
         folder_id: r.get(8)?,
+        save_password: r.get::<_, i64>(9)? != 0,
     })
 }
 
-pub fn save_connection(db: &Connection, c: &ConnectionConfig) -> rusqlite::Result<i64> {
-    match c.id {
+/// Stores the connection; the password goes to the secret store only when `save_password` is set (an empty
+/// one keeps what is stored), otherwise any stored password is removed.
+pub fn save_connection(db: &Connection, secrets: &Secrets, c: &ConnectionConfig) -> Result<i64, String> {
+    let e = |e: rusqlite::Error| e.to_string();
+    let id = match c.id {
         Some(id) => {
             db.execute(
-                "UPDATE connections SET name=?1, host=?2, port=?3, database=?4, user=?5, password=?6, ssl=?7 WHERE id=?8",
-                params![c.name, c.host, c.port, c.database, c.user, c.password, c.ssl, id],
-            )?;
-            Ok(id)
+                "UPDATE connections SET name=?1, host=?2, port=?3, database=?4, user=?5, ssl=?6, save_password=?7 WHERE id=?8",
+                params![c.name, c.host, c.port, c.database, c.user, c.ssl, c.save_password, id],
+            )
+            .map_err(e)?;
+            id
         }
         None => {
             db.execute(
-                "INSERT INTO connections (name, host, port, database, user, password, ssl, folder_id, position)
+                "INSERT INTO connections (name, host, port, database, user, ssl, folder_id, save_password, position)
                  VALUES (?1,?2,?3,?4,?5,?6,?7,?8, (SELECT COALESCE(MAX(position), 0) + 1 FROM connections))",
-                params![c.name, c.host, c.port, c.database, c.user, c.password, c.ssl, c.folder_id],
-            )?;
-            Ok(db.last_insert_rowid())
+                params![c.name, c.host, c.port, c.database, c.user, c.ssl, c.folder_id, c.save_password],
+            )
+            .map_err(e)?;
+            db.last_insert_rowid()
         }
+    };
+    if !c.save_password {
+        secrets.remove(id);
+        db.execute("UPDATE connections SET password = '' WHERE id = ?1", [id]).map_err(e)?;
+    } else if !c.password.is_empty() {
+        if let Err(err) = secrets.set(id, &c.password) {
+            if c.id.is_none() {
+                let _ = delete_connection(db, secrets, id); // do not leave a half-saved new connection
+            }
+            return Err(err);
+        }
+        db.execute("UPDATE connections SET password = '' WHERE id = ?1", [id]).map_err(e)?;
     }
+    Ok(id)
 }
 
-pub fn delete_connection(db: &Connection, id: i64) -> rusqlite::Result<()> {
+pub fn delete_connection(db: &Connection, secrets: &Secrets, id: i64) -> rusqlite::Result<()> {
     db.execute("DELETE FROM connections WHERE id = ?1", [id])?;
+    secrets.remove(id);
     Ok(())
 }
 

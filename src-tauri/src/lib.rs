@@ -2,11 +2,13 @@ mod files;
 mod json_store;
 mod local;
 mod pg;
+mod secrets;
 mod session;
 mod settings;
 
 use local::{ConnectionConfig, Folder, HistoryEntry, Placement, SavedQuery};
 use pg::{DetailItem, QueryResult, TableInfo};
+use secrets::Secrets;
 use session::{Session, SessionStore};
 use settings::{Settings, SettingsStore};
 use serde::Serialize;
@@ -27,6 +29,7 @@ struct Active {
 struct AppState {
     app: AppHandle,
     store: Mutex<rusqlite::Connection>,
+    secrets: Secrets,
     settings: Mutex<SettingsStore>,
     session: Mutex<SessionStore>,
     active: AsyncMutex<Option<Active>>,
@@ -36,7 +39,7 @@ struct AppState {
 
 impl AppState {
     /// Runs `f` with the local SQLite. The lock never crosses an `.await`.
-    fn store<T>(&self, f: impl FnOnce(&rusqlite::Connection) -> rusqlite::Result<T>) -> CmdResult<T> {
+    fn store<T, E: ToString>(&self, f: impl FnOnce(&rusqlite::Connection) -> Result<T, E>) -> CmdResult<T> {
         let db = self.store.lock().map_err(|e| e.to_string())?;
         f(&db).map_err(|e| e.to_string())
     }
@@ -76,12 +79,28 @@ fn list_connections(state: State<AppState>) -> CmdResult<Vec<ConnectionConfig>> 
 
 #[tauri::command]
 fn save_connection(state: State<AppState>, config: ConnectionConfig) -> CmdResult<i64> {
-    state.store(|db| local::save_connection(db, &config))
+    state.store(|db| local::save_connection(db, &state.secrets, &config))
 }
 
 #[tauri::command]
 fn delete_connection(state: State<AppState>, id: i64) -> CmdResult<()> {
-    state.store(|db| local::delete_connection(db, id))
+    state.store(|db| local::delete_connection(db, &state.secrets, id))
+}
+
+#[tauri::command]
+async fn vault_status(state: State<'_, AppState>) -> CmdResult<secrets::Status> {
+    // The first call probes the keychain, which may block on the session bus.
+    let app = state.app.clone();
+    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().secrets.status())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// Creates (first use) or unlocks the vault, then moves any password still left in SQLite into it.
+#[tauri::command]
+fn vault_open(state: State<AppState>, password: String, create: bool) -> CmdResult<()> {
+    if create { state.secrets.create(&password)? } else { state.secrets.unlock(&password)? }
+    state.store(|db| local::migrate_passwords(db, &state.secrets))
 }
 
 #[tauri::command]
@@ -115,13 +134,22 @@ fn reorder_folders(state: State<AppState>, ids: Vec<i64>) -> CmdResult<()> {
 }
 
 #[tauri::command]
-async fn test_connection(config: ConnectionConfig) -> CmdResult<()> {
+async fn test_connection(state: State<'_, AppState>, mut config: ConnectionConfig) -> CmdResult<()> {
+    // Editing a saved connection with the password left blank: test with the stored one.
+    if let (Some(id), true, true) = (config.id, config.save_password, config.password.is_empty()) {
+        if let Ok(stored) = state.store(|db| local::get_connection(db, &state.secrets, id)) {
+            config.password = stored.password;
+        }
+    }
     pg::open(&config).await.map(drop)
 }
 
 #[tauri::command]
-async fn connect(state: State<'_, AppState>, id: i64) -> CmdResult<Vec<TableInfo>> {
-    let config = state.store(|db| local::get_connection(db, id))?;
+async fn connect(state: State<'_, AppState>, id: i64, password: Option<String>) -> CmdResult<Vec<TableInfo>> {
+    let mut config = state.store(|db| local::get_connection(db, &state.secrets, id))?;
+    if let Some(password) = password {
+        config.password = password; // asked by the user for connections that do not save it
+    }
     let client = Arc::new(pg::open(&config).await?.client);
     let tables = pg::list_tables(&client).await?;
     state.cancel_counting().await;
@@ -260,7 +288,10 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let store = local::open(&dir.join("pg-studio.sqlite"))?;
-            app.manage(AppState { app: app.handle().clone(), store: Mutex::new(store), settings: Mutex::new(SettingsStore::load(dir.join("settings.json"))), session: Mutex::new(SessionStore::load(dir.join("session.json"))), active: AsyncMutex::new(None), counting: AsyncMutex::new(None) });
+            app.manage(AppState { app: app.handle().clone(), store: Mutex::new(store), secrets: Secrets::load(dir.join("vault.json")), settings: Mutex::new(SettingsStore::load(dir.join("settings.json"))), session: Mutex::new(SessionStore::load(dir.join("session.json"))), active: AsyncMutex::new(None), counting: AsyncMutex::new(None) });
+            // Passwords left in SQLite by older versions move to the keychain (or stay until the vault is unlocked).
+            let state = app.state::<AppState>();
+            let _ = state.store(|db| local::migrate_passwords(db, &state.secrets));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -268,6 +299,8 @@ pub fn run() {
             save_connection,
             delete_connection,
             reorder_connections,
+            vault_status,
+            vault_open,
             list_folders,
             create_folder,
             rename_folder,

@@ -28,10 +28,10 @@ export function useConnections(restoreId: number | null) {
   }, []);
 
   /** Throws if the connection fails. */
-  const connect = useCallback(async (id: number) => {
+  const connect = useCallback(async (id: number, password?: string) => {
     setConnecting(true);
     try {
-      setTables(await api.connect(id));
+      setTables(await api.connect(id, password));
       setActiveId(id);
     } finally {
       setConnecting(false);
