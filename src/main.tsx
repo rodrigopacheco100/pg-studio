@@ -9,6 +9,10 @@ import "./index.css";
 
 void flushOnClose();
 
+// The webview's own menu (Back, Reload, Inspect…) has no place in the app: the places that need a
+// context menu render theirs (Radix handles the event first, this only blocks the native one).
+window.addEventListener("contextmenu", (e) => e.preventDefault());
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <DialogsProvider>

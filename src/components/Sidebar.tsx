@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { ChevronRight, Database, Folder, FolderOpen, FolderPlus, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { useSettings } from "../hooks/useSettings";
@@ -69,8 +70,9 @@ export function Sidebar(p: Props) {
   }
 
   const row = (c: Conn) => (
+    <ContextMenu key={c.id}>
+      <ContextMenuTrigger asChild>
     <li
-      key={c.id}
       draggable={browsing}
       onDragStart={(e) => start(e, { kind: "conn", id: c.id! })}
       onDragEnd={() => { drag.current = null; setOver(null); }}
@@ -117,6 +119,14 @@ export function Sidebar(p: Props) {
         </Button>
       </span>
     </li>
+      </ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onSelect={() => p.onToggle(c)}>{c.id === p.activeId ? "Disconnect" : "Connect"}</ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onSelect={() => p.onEdit(c)}>Edit…</ContextMenuItem>
+        <ContextMenuItem variant="destructive" onSelect={() => p.onDelete(c)}>Delete</ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   );
 
   return (
@@ -154,6 +164,8 @@ export function Sidebar(p: Props) {
               const folderOver = over === `f${f.id}`;
               return (
                 <li key={`f${f.id}`}>
+                  <ContextMenu>
+                    <ContextMenuTrigger asChild>
                   <div
                     draggable
                     onDragStart={(e) => start(e, { kind: "folder", id: f.id })}
@@ -184,6 +196,12 @@ export function Sidebar(p: Props) {
                       </Button>
                     </span>
                   </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem onSelect={() => p.onRenameFolder(f)}>Rename…</ContextMenuItem>
+                      <ContextMenuItem variant="destructive" onSelect={() => p.onDeleteFolder(f)}>Delete</ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
                   {open && (
                     <ul className="ml-4 border-l pl-1">
                       {p.connections.filter((c) => c.folder_id === f.id).map(row)}

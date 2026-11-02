@@ -1,5 +1,6 @@
 import { ChevronRight, Columns3, Eye, KeyRound, Link2, ListOrdered, ShieldCheck, Table2 } from "lucide-react";
 import { type ReactNode, useState } from "react";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import { api, errText } from "../api";
 import { ItemDetailsDialog } from "./ItemDetailsDialog";
@@ -85,11 +86,19 @@ export function TableNode({ table, onOpen }: { table: TableInfo; onOpen: (t: Tab
   const isView = table.kind === "VIEW";
   return (
     <div>
-      <div onClick={() => onOpen({ schema: table.schema, name: table.name })} className={cn(row, "cursor-pointer pl-1")}>
-        <Chevron open={open} onToggle={() => setOpen(!open)} />
-        {isView ? <Eye className={icon} /> : <Table2 className={icon} />}
-        <span className="truncate">{table.name}</span>
-      </div>
+      <ContextMenu>
+        <ContextMenuTrigger asChild>
+          <div onClick={() => onOpen({ schema: table.schema, name: table.name })} className={cn(row, "cursor-pointer pl-1")}>
+            <Chevron open={open} onToggle={() => setOpen(!open)} />
+            {isView ? <Eye className={icon} /> : <Table2 className={icon} />}
+            <span className="truncate">{table.name}</span>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent>
+          <ContextMenuItem onSelect={() => onOpen({ schema: table.schema, name: table.name })}>Open data</ContextMenuItem>
+          <ContextMenuItem onSelect={() => void navigator.clipboard.writeText(`${table.schema}.${table.name}`)}>Copy name</ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
       {open &&
         FOLDERS.filter((f) => !(isView && f.tableOnly)).map((f) => (
           <Folder key={f.kind} table={table} kind={f.kind} label={f.label} icon={f.icon} />

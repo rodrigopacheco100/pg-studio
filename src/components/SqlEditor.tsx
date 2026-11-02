@@ -1,5 +1,5 @@
 import { autocompletion } from "@codemirror/autocomplete";
-import { indentWithTab } from "@codemirror/commands";
+import { indentWithTab, selectAll } from "@codemirror/commands";
 import { indentUnit } from "@codemirror/language";
 import { PostgreSQL, sql } from "@codemirror/lang-sql";
 import { Compartment, EditorState, Prec } from "@codemirror/state";
@@ -11,6 +11,8 @@ import { type FormatOptions, formatSql } from "../lib/formatSql";
 import { useSettings } from "../hooks/useSettings";
 import { statementAtCursor } from "../lib/statements";
 import { useDialogs } from "../hooks/useDialogs";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
+import { EditMenuItems } from "./EditMenu";
 import { runGutter } from "./runGutter";
 import { errText } from "../api";
 import { createSqlCompletion } from "../lib/sqlComplete";
@@ -78,6 +80,42 @@ function formatDocument(v: EditorView, options: FormatOptions, onError: (message
   } catch (e) {
     onError(`Could not format the SQL:\n${errText(e)}`);
   }
+}
+
+/** Context menu of the editor: running, formatting and the edit entries. */
+function EditorMenu({ view, onRun, onFormat }: { view: React.RefObject<EditorView | null>; onRun: (sql: string) => void; onFormat: () => void }) {
+  return (
+    <ContextMenuContent onCloseAutoFocus={(e) => { e.preventDefault(); view.current?.focus(); }}>
+      <EditorMenuItems view={view} onRun={onRun} onFormat={onFormat} />
+    </ContextMenuContent>
+  );
+}
+
+/** Mounted only while the menu is open, so the selection is the current one. */
+function EditorMenuItems({ view, onRun, onFormat }: { view: React.RefObject<EditorView | null>; onRun: (sql: string) => void; onFormat: () => void }) {
+  const v = view.current;
+  const selection = v?.state.selection.main;
+  const hasSelection = !!selection && !selection.empty;
+  const selectedText = () => (v && selection ? v.state.sliceDoc(selection.from, selection.to) : "");
+  return (
+    <>
+      <ContextMenuItem onSelect={() => v && onRun(getRunText(v))}>{hasSelection ? "Run selection" : "Run"}</ContextMenuItem>
+      <ContextMenuItem onSelect={() => v && onRun(statementAtCursor(v.state.doc.toString(), v.state.selection.main.head))}>
+        Run statement at cursor
+      </ContextMenuItem>
+      <ContextMenuItem onSelect={onFormat}>Beautify</ContextMenuItem>
+      <ContextMenuSeparator />
+      <EditMenuItems
+        canCut={hasSelection}
+        canCopy={hasSelection}
+        canPaste
+        cut={() => { void navigator.clipboard.writeText(selectedText()); v?.dispatch(v.state.replaceSelection("")); }}
+        copy={() => void navigator.clipboard.writeText(selectedText())}
+        paste={(text) => v?.dispatch(v.state.replaceSelection(text))}
+        selectAll={() => v && selectAll(v)}
+      />
+    </>
+  );
 }
 
 export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
@@ -152,5 +190,16 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
     }
   }, [value]);
 
-  return <div className="min-h-0 flex-1 overflow-hidden [&_.cm-editor]:h-full" ref={host} />;
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>
+        <div className="min-h-0 flex-1 overflow-hidden [&_.cm-editor]:h-full" ref={host} />
+      </ContextMenuTrigger>
+      <EditorMenu
+        view={view}
+        onRun={(sql) => latest.current.onRun(sql)}
+        onFormat={() => view.current && formatDocument(view.current, formatOptions.current, (m) => void dialogs.alert(m))}
+      />
+    </ContextMenu>
+  );
 }
