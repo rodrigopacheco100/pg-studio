@@ -44,6 +44,7 @@ Values are integers (`u32` in Rust); round before saving.
 ## SQL editor
 
 - `src/lib/statements.ts`: `splitStatements` splits a script on `;` outside strings, quoted identifiers, comments and `$tag$` blocks; `statementAtCursor` picks the statement under the cursor. Not handled: backslash escapes in `E'...'` strings.
+- `src/lib/formatSql.ts`: PostgreSQL formatting via `sql-formatter` (upper-case keywords, 2 spaces). `SqlEditor`'s handle `format()` replaces the document in one undoable transaction; bound to the Beautify button and `Ctrl+Shift+F` in `QueryView`.
 - `src/components/runGutter.ts`: a ▶ marker on the first line of each statement; clicking runs only that statement.
 - `SqlEditor` calls `onRun(sql)`: `Ctrl+Enter` passes the selection or whole text, `Ctrl+Shift+Enter` the statement at the cursor, the ▶ its own statement.
 

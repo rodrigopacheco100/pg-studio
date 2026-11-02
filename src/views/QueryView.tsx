@@ -1,4 +1,4 @@
-import { FileText, FolderOpen, Play, Plus, Save, SaveAll, X } from "lucide-react";
+import { AlignLeft, FileText, FolderOpen, Play, Plus, Save, SaveAll, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,7 @@ export function QueryView({ documents, tables, results, visible }: Props) {
         : key === "o" && !e.shiftKey ? open
         : key === "t" && !e.shiftKey ? () => create()
         : key === "w" && !e.shiftKey ? () => close(active.id)
+        : key === "f" && e.shiftKey ? () => editors.current.get(active.id)?.format()
         : null;
       if (!action) return;
       e.preventDefault();
@@ -95,6 +96,7 @@ export function QueryView({ documents, tables, results, visible }: Props) {
         </div>
         <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
           <Button size="sm" onClick={() => run(editors.current.get(active.id)?.getRunText() ?? "")}><Play /> Run</Button>
+          <Button size="sm" variant="outline" onClick={() => editors.current.get(active.id)?.format()} title="Format the SQL in this tab (Ctrl+Shift+F)"><AlignLeft /> Beautify</Button>
           <Button size="sm" variant="outline" onClick={() => void save(active.id)} title="Save file (Ctrl+S)"><SaveAll /> Save file</Button>
           <Button size="sm" variant="outline" onClick={saveQuery} title="Keep this query in the Saved tab"><Save /> Save query</Button>
           <span className="ml-auto text-xs text-muted-foreground">Ctrl+Enter runs all · Ctrl+Shift+Enter runs the query at the cursor · Ctrl+Space autocompletes</span>
