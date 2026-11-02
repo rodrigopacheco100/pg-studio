@@ -1,5 +1,5 @@
 import { AlignLeft, FileText, FolderOpen, Play, Plus, Save, SaveAll, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useImperativeHandle, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { api } from "../api";
@@ -12,7 +12,16 @@ import { useSettings } from "../hooks/useSettings";
 import type { ResultsApi } from "../hooks/useResults";
 import type { TableInfo } from "../types";
 
+/** Commands of the active editor that the app menu can trigger. */
+export interface QueryViewHandle {
+  run: () => void;
+  runAtCursor: () => void;
+  format: () => void;
+  saveQuery: () => Promise<void>;
+}
+
 interface Props {
+  ref?: React.Ref<QueryViewHandle>;
   documents: DocumentsApi;
   tables: TableInfo[];
   results: ResultsApi;
@@ -21,7 +30,7 @@ interface Props {
 }
 
 /** Tabbed query editors on top of the shared results pane. */
-export function QueryView({ documents, tables, results, visible }: Props) {
+export function QueryView({ ref, documents, tables, results, visible }: Props) {
   const { docs, active, select, create, change, open, save, close } = documents;
   const editors = useRef(new Map<number, SqlEditorHandle>());
   const { settings, update } = useSettings();
@@ -36,6 +45,14 @@ export function QueryView({ documents, tables, results, visible }: Props) {
     const name = await dialogs.prompt("Query name:", "Save query");
     if (name) await api.saveQuery({ id: null, name, sql: active.sql });
   }
+
+  const editor = () => editors.current.get(active.id);
+  useImperativeHandle(ref, () => ({
+    run: () => run(editor()?.getRunText() ?? ""),
+    runAtCursor: () => run(editor()?.getCursorStatement() ?? ""),
+    format: () => editor()?.format(),
+    saveQuery,
+  }));
 
   // Put the cursor back in the editor when switching tabs or coming back to this view.
   useEffect(() => {
@@ -53,7 +70,7 @@ export function QueryView({ documents, tables, results, visible }: Props) {
         : key === "o" && !e.shiftKey ? open
         : key === "t" && !e.shiftKey ? () => create()
         : key === "w" && !e.shiftKey ? () => close(active.id)
-        : key === "f" && e.shiftKey ? () => editors.current.get(active.id)?.format()
+        : key === "f" && e.shiftKey ? () => editor()?.format()
         : null;
       if (!action) return;
       e.preventDefault();
@@ -97,8 +114,8 @@ export function QueryView({ documents, tables, results, visible }: Props) {
           <Button variant="ghost" size="icon-xs" className="my-1" title="Open file (Ctrl+O)" onClick={() => void open()}><FolderOpen /></Button>
         </div>
         <div className="flex items-center gap-2 border-b bg-muted/40 px-3 py-1.5">
-          <Button size="sm" onClick={() => run(editors.current.get(active.id)?.getRunText() ?? "")}><Play /> Run</Button>
-          <Button size="sm" variant="outline" onClick={() => editors.current.get(active.id)?.format()} title="Format the SQL in this tab (Ctrl+Shift+F)"><AlignLeft /> Beautify</Button>
+          <Button size="sm" onClick={() => run(editor()?.getRunText() ?? "")}><Play /> Run</Button>
+          <Button size="sm" variant="outline" onClick={() => editor()?.format()} title="Format the SQL in this tab (Ctrl+Shift+F)"><AlignLeft /> Beautify</Button>
           <Button size="sm" variant="outline" onClick={() => void save(active.id)} title="Save file (Ctrl+S)"><SaveAll /> Save file</Button>
           <Button size="sm" variant="outline" onClick={saveQuery} title="Keep this query in the Saved tab"><Save /> Save query</Button>
           <span className="ml-auto text-xs text-muted-foreground">Ctrl+Enter runs all · Ctrl+Shift+Enter runs the query at the cursor · Ctrl+Space autocompletes</span>

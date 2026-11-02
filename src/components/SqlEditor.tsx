@@ -17,6 +17,8 @@ import type { TableInfo } from "../types";
 export interface SqlEditorHandle {
   /** The selection, or the whole text if nothing is selected. */
   getRunText: () => string;
+  /** The statement under the cursor (see `statementAtCursor`). */
+  getCursorStatement: () => string;
   focus: () => void;
   /** Reformats the whole document as one undoable change; alerts if the SQL cannot be parsed. */
   format: () => void;
@@ -37,7 +39,7 @@ const theme = EditorView.theme({
   "&.cm-focused": { outline: "none" },
   ".cm-gutters": { backgroundColor: "var(--background)", color: "var(--muted-foreground)", border: "none" },
   ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "color-mix(in oklch, var(--muted) 50%, transparent)" },
-  ".cm-scroller": { fontFamily: "ui-monospace, SFMono-Regular, monospace", fontSize: "13px" },
+  ".cm-scroller": { fontFamily: "var(--app-font-mono)", fontSize: "13px" },
   ".cm-tooltip": {
     backgroundColor: "var(--popover)",
     color: "var(--popover-foreground)",
@@ -79,6 +81,10 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
   latest.current = { onChange, onRun, tables };
 
   useImperativeHandle(ref, () => ({ getRunText: () => getRunText(view.current!), focus: () => view.current?.focus(),
+    getCursorStatement: () => {
+      const { doc, selection } = view.current!.state;
+      return statementAtCursor(doc.toString(), selection.main.head);
+    },
     format: () => formatDocument(view.current!, (m) => void dialogs.alert(m)),
   }));
 

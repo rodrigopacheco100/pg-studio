@@ -1,7 +1,9 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { AppMenu } from "./components/AppMenu";
+import { SettingsDialog } from "./components/SettingsDialog";
 import { ConnectionDialog } from "./components/ConnectionDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
@@ -14,7 +16,7 @@ import { useDocuments } from "./hooks/useDocuments";
 import { useResults } from "./hooks/useResults";
 import type { Conn } from "./types";
 import { HistoryView } from "./views/HistoryView";
-import { QueryView } from "./views/QueryView";
+import { QueryView, type QueryViewHandle } from "./views/QueryView";
 import { SavedView } from "./views/SavedView";
 
 type View = "query" | "history" | "saved";
@@ -30,6 +32,8 @@ export function App() {
   const [dialog, setDialog] = useState<Conn | null | undefined>(undefined);
 
   const [restored, setRestored] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const queryView = useRef<QueryViewHandle>(null);
   const { settings, update } = useSettings();
 
   // The backend reopens the connection by itself when it drops; warns because the database session starts over.
@@ -86,7 +90,22 @@ export function App() {
 
   return (
     <TooltipProvider>
-      <div className="grid h-screen grid-rows-[minmax(0,1fr)_auto]" style={{ gridTemplateColumns: `${settings.sidebarWidth}px 1fr` }}>
+      <div className="grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" style={{ gridTemplateColumns: `${settings.sidebarWidth}px 1fr` }}>
+        <AppMenu
+          newFile={() => { setView("query"); documents.create(); }}
+          openFile={() => { setView("query"); void documents.open(); }}
+          saveFile={() => void documents.save(documents.active.id)}
+          saveFileAs={() => void documents.save(documents.active.id, true)}
+          closeTab={() => void documents.close(documents.active.id)}
+          run={() => { setView("query"); queryView.current?.run(); }}
+          runAtCursor={() => { setView("query"); queryView.current?.runAtCursor(); }}
+          beautify={() => { setView("query"); queryView.current?.format(); }}
+          saveQuery={() => void queryView.current?.saveQuery()}
+          newConnection={() => setDialog(null)}
+          refreshTables={() => ws.refreshTables().catch((e) => dialogs.alert(errText(e)))}
+          openSettings={() => setSettingsOpen(true)}
+          connected={ws.activeId !== null}
+        />
         <Sidebar
           connections={ws.connections}
           activeId={ws.activeId}
@@ -112,7 +131,7 @@ export function App() {
           <div className="flex min-h-0 flex-1 flex-col">
             {/* Kept mounted to preserve the editor (cursor, undo) when switching tabs. */}
             <div className="flex min-h-0 flex-1 flex-col" hidden={view !== "query"}>
-              <QueryView documents={documents} tables={ws.tables} results={results} visible={view === "query"} />
+              <QueryView ref={queryView} documents={documents} tables={ws.tables} results={results} visible={view === "query"} />
             </div>
             {view === "history" && <HistoryView onUse={useSql} />}
             {view === "saved" && <SavedView onUse={useSql} />}
@@ -120,6 +139,7 @@ export function App() {
         </main>
         <StatusBar connection={active} info={results.info} paging={results.paging} onPage={results.goToPage} restored={restored} />
 
+        {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
         {dialog !== undefined && (
           <ConnectionDialog
             initial={dialog}

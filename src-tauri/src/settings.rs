@@ -10,11 +10,14 @@ use serde::{Deserialize, Serialize};
 pub struct Settings {
     pub sidebar_width: u32,
     pub editor_height: u32,
+    /// Font ids, resolved by the frontend (`src/lib/fonts.ts`).
+    pub ui_font: String,
+    pub editor_font: String,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { sidebar_width: 256, editor_height: 300 }
+        Self { sidebar_width: 256, editor_height: 300, ui_font: "roboto".into(), editor_font: "system-mono".into() }
     }
 }
 
