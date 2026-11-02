@@ -9,6 +9,8 @@ export interface Conn {
   ssl: boolean;
   /** Folder the connection is filed under; `null` = top level. */
   folder_id: number | null;
+  /** Where the database lives (tag in the sidebar and band while connected); empty = unspecified. */
+  environment: "" | "dev" | "staging" | "prod";
   /** Reach the server through an SSH tunnel. */
   ssh_enabled: boolean;
   ssh_host: string;

@@ -8,6 +8,8 @@ import { ConnectionDialog } from "./components/ConnectionDialog";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { errText } from "./api";
+import { environmentOf } from "./lib/environments";
+import { cn } from "@/lib/utils";
 import { useVault } from "./hooks/useVault";
 import { useConnections } from "./hooks/useConnections";
 import { useSession } from "./hooks/useSession";
@@ -56,6 +58,7 @@ export function App() {
   }, []);
 
   const active = ws.connections.find((c) => c.id === ws.activeId);
+  const environment = environmentOf(active);
 
   function resetWorkspace() {
     results.reset();
@@ -124,7 +127,13 @@ export function App() {
 
   return (
     <TooltipProvider>
-      <div className="grid h-screen grid-rows-[auto_minmax(0,1fr)_auto]" style={{ gridTemplateColumns: `${settings.sidebarWidth}px 1fr` }}>
+      <div
+        className="grid h-screen"
+        style={{
+          gridTemplateColumns: `${settings.sidebarWidth}px 1fr`,
+          gridTemplateRows: environment ? "auto auto minmax(0,1fr) auto" : "auto minmax(0,1fr) auto",
+        }}
+      >
         <AppMenu
           newFile={() => { setView("query"); documents.create(); }}
           openFile={() => { setView("query"); void documents.open(); }}
@@ -140,6 +149,11 @@ export function App() {
           openSettings={() => setSettingsOpen(true)}
           connected={ws.activeId !== null}
         />
+        {environment && active && (
+          <div className={cn("col-span-2 truncate px-3 py-0.5 text-center text-xs font-semibold tracking-wide uppercase", environment.band)}>
+            {environment.label} · {active.name} ({active.database})
+          </div>
+        )}
         <Sidebar
           connections={ws.connections}
           folders={ws.folders}

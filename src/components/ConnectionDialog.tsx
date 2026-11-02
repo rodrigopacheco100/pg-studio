@@ -9,6 +9,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { cn } from "@/lib/utils";
 import { api, errText, pickKeyFile } from "../api";
 import { PasswordInput } from "./PasswordInput";
+import { ENVIRONMENTS } from "../lib/environments";
 import { useVault } from "../hooks/useVault";
 import { parseConnUrl } from "../lib/connUrl";
 import type { Conn } from "../types";
@@ -26,6 +27,7 @@ interface Draft {
   ssl: boolean;
   folder_id: number | null;
   save_password: boolean;
+  environment: Conn["environment"];
   ssh_enabled: boolean;
   ssh_host: string;
   ssh_port: string;
@@ -36,7 +38,7 @@ interface Draft {
 }
 
 const EMPTY: Draft = {
-  id: null, name: "", host: "localhost", port: "5432", database: "postgres", user: "postgres", password: "", ssl: false, folder_id: null, save_password: true,
+  id: null, name: "", host: "localhost", port: "5432", database: "postgres", user: "postgres", password: "", ssl: false, folder_id: null, save_password: true, environment: "",
   ssh_enabled: false, ssh_host: "", ssh_port: "22", ssh_user: "", ssh_auth: "key", ssh_key_path: "", ssh_secret: "",
 };
 
@@ -179,6 +181,18 @@ export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
               {field("port", "Port", { type: "number" })}
             </div>
             {field("database", "Database", {})}
+              <div className="grid gap-1.5">
+                <Label htmlFor="conn-environment">Environment</Label>
+                <select
+                  id="conn-environment"
+                  value={draft.environment}
+                  onChange={(e) => set("environment", e.target.value as Draft["environment"])}
+                  className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm dark:bg-input/30"
+                >
+                  <option value="">Not specified</option>
+                  {ENVIRONMENTS.map((env) => <option key={env.id} value={env.id}>{env.label}</option>)}
+                </select>
+              </div>
             </TabsContent>
             <TabsContent value="security" className="grid min-h-72 content-start gap-3 pt-2">
             <div className="grid grid-cols-2 gap-3">

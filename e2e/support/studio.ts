@@ -19,6 +19,8 @@ export interface ConnectionForm {
   /** Store the database password (asks for a master password first, as there is no keychain). Default: no. */
   savePassword?: boolean;
   password?: string;
+  /** Label of the environment option (e.g. "Production"). */
+  environment?: string;
   ssh?: { auth: "key" | "password" | "agent"; keyPath?: string; secret?: string };
 }
 
@@ -69,6 +71,7 @@ export class Studio {
     await dialog.getByLabel("Host", { exact: true }).fill(DB.host);
     await dialog.getByLabel("Port", { exact: true }).fill(DB.port);
     await dialog.getByLabel("Database", { exact: true }).fill(DB.database);
+    if (c.environment) await dialog.getByLabel("Environment").selectOption({ label: c.environment });
 
     await dialog.getByRole("tab", { name: "Security" }).click();
     await dialog.getByLabel("User", { exact: true }).fill(DB.user);

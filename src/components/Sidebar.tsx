@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
+import { environmentOf } from "../lib/environments";
 import { useSettings } from "../hooks/useSettings";
 import { ResizeHandle } from "./ResizeHandle";
 import { TableNode } from "./TableNode";
@@ -98,7 +99,14 @@ export function Sidebar(p: Props) {
     >
       <Database className="size-4 shrink-0" />
       <span className="min-w-0 flex-1" title={`${c.user}@${c.host}:${c.port}/${c.database}`}>
-        <span className="block truncate">{c.name}</span>
+        <span className="flex items-center gap-1.5">
+          <span className="truncate">{c.name}</span>
+          {environmentOf(c) && (
+            <span className={cn("shrink-0 rounded px-1 text-[10px] leading-4 font-semibold uppercase", environmentOf(c)!.tag)}>
+              {environmentOf(c)!.id}
+            </span>
+          )}
+        </span>
         {/* Follows the name's color (selection) but a bit dimmer. */}
         <span
           className={cn(

@@ -33,6 +33,9 @@ pub struct ConnectionConfig {
     /// SSH password, or the private key's passphrase. Handled like `password`.
     #[serde(default)]
     pub ssh_secret: String,
+    /// Where the database lives, to tell it apart in the interface: `dev`, `staging`, `prod` or empty.
+    #[serde(default)]
+    pub environment: String,
     /// When false the passwords are not kept anywhere and are asked on every connect.
     #[serde(default = "yes")]
     pub save_password: bool,
@@ -51,6 +54,14 @@ fn ssh_auth() -> String {
     "key".into()
 }
 
+/// The known environment names; anything else is stored as "no environment".
+fn environment(c: &ConnectionConfig) -> &str {
+    match c.environment.as_str() {
+        env @ ("dev" | "staging" | "prod") => env,
+        _ => "",
+    }
+}
+
 /// Names of a connection's secrets in the secret store.
 fn password_key(id: i64) -> String {
     format!("connection-{id}")
@@ -60,7 +71,7 @@ fn ssh_secret_key(id: i64) -> String {
 }
 
 const COLUMNS: &str = "id, name, host, port, database, user, password, ssl, folder_id, save_password, \
-                       ssh_enabled, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_key_path";
+                       ssh_enabled, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_key_path, environment";
 
 /// One entry of the new connection order: its position is its index in the list.
 #[derive(Deserialize)]
@@ -97,6 +108,7 @@ pub(super) fn init(db: &Connection) -> rusqlite::Result<()> {
         ("ssh_user", "TEXT NOT NULL DEFAULT ''"),
         ("ssh_auth", "TEXT NOT NULL DEFAULT 'key'"),
         ("ssh_key_path", "TEXT NOT NULL DEFAULT ''"),
+        ("environment", "TEXT NOT NULL DEFAULT ''"),
     ] {
         if !has(col)? {
             db.execute(&format!("ALTER TABLE connections ADD COLUMN {col} {def}"), [])?;
@@ -163,6 +175,7 @@ fn row_to_connection(r: &rusqlite::Row) -> rusqlite::Result<ConnectionConfig> {
         ssh_user: r.get(13)?,
         ssh_auth: r.get(14)?,
         ssh_key_path: r.get(15)?,
+        environment: r.get(16)?,
         ssh_secret: String::new(),
     })
 }
@@ -175,9 +188,9 @@ pub fn save(db: &Connection, secrets: &Secrets, c: &ConnectionConfig) -> Result<
         Some(id) => {
             db.execute(
                 "UPDATE connections SET name=?1, host=?2, port=?3, database=?4, user=?5, ssl=?6, save_password=?7,
-                 ssh_enabled=?8, ssh_host=?9, ssh_port=?10, ssh_user=?11, ssh_auth=?12, ssh_key_path=?13 WHERE id=?14",
+                 ssh_enabled=?8, ssh_host=?9, ssh_port=?10, ssh_user=?11, ssh_auth=?12, ssh_key_path=?13, environment=?14 WHERE id=?15",
                 params![c.name, c.host, c.port, c.database, c.user, c.ssl, c.save_password,
-                        c.ssh_enabled, c.ssh_host, c.ssh_port, c.ssh_user, c.ssh_auth, c.ssh_key_path, id],
+                        c.ssh_enabled, c.ssh_host, c.ssh_port, c.ssh_user, c.ssh_auth, c.ssh_key_path, environment(c), id],
             )
             .map_err(e)?;
             id
@@ -185,10 +198,10 @@ pub fn save(db: &Connection, secrets: &Secrets, c: &ConnectionConfig) -> Result<
         None => {
             db.execute(
                 "INSERT INTO connections (name, host, port, database, user, ssl, folder_id, save_password,
-                 ssh_enabled, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_key_path, position)
-                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14, (SELECT COALESCE(MAX(position), 0) + 1 FROM connections))",
+                 ssh_enabled, ssh_host, ssh_port, ssh_user, ssh_auth, ssh_key_path, environment, position)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15, (SELECT COALESCE(MAX(position), 0) + 1 FROM connections))",
                 params![c.name, c.host, c.port, c.database, c.user, c.ssl, c.folder_id, c.save_password,
-                        c.ssh_enabled, c.ssh_host, c.ssh_port, c.ssh_user, c.ssh_auth, c.ssh_key_path],
+                        c.ssh_enabled, c.ssh_host, c.ssh_port, c.ssh_user, c.ssh_auth, c.ssh_key_path, environment(c)],
             )
             .map_err(e)?;
             db.last_insert_rowid()
