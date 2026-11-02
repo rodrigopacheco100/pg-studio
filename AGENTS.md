@@ -109,6 +109,14 @@ The webview's native menu is blocked globally (`main.tsx`); every place that nee
 - `SettingsDialog` edits the settings through `useSettings().update`; changes apply and persist immediately.
 - Fonts: the font packages (`@fontsource-variable/*`) are imported in `index.css` and listed in `src/lib/fonts.ts` (`UI_FONTS`, `EDITOR_FONTS`: id, label, CSS family). `SettingsProvider` copies the chosen families into the CSS variables `--app-font-sans` / `--app-font-mono` on the root; Tailwind's `font-sans` / `font-mono` and the CodeMirror theme read those. To offer a new font: add the package import in `index.css` and an entry in `fonts.ts`. An unknown saved id falls back to the first option.
 
+## End-to-end tests (`e2e/`)
+
+`bun run e2e` (or `bash e2e/run.sh [playwright args]`) runs Playwright flows against the real app in an isolated Docker Compose environment (`e2e/docker-compose.yml`): `postgres` (seeded by `fixtures/seed.sql`), `bastion` (sshd that generates test keys in a shared volume), `backend`, `web` and `tests`. Nothing from the host is used and no ports are published; images build with `network: host` only to download packages. The run builds the images, runs the tests and tears everything down (`down -v`); reports go to `e2e/reports`.
+
+Playwright cannot drive the native Tauri window on Linux, so the production frontend runs in Chromium and its `invoke` is replaced (`support/tauri-shim.ts`) by calls to `src-tauri/src/bin/e2e_server.rs` (cargo feature `e2e`): the app's real commands (`configure()` in `lib.rs`) on Tauri's mock runtime behind HTTP. Each test gets its own app instance and data directory (`x-e2e-session` header), so tests are independent and run in parallel. Not covered: the native window, plugins (dialogs, events) and the OS keychain (there is none in the containers, so the master-password vault is what gets tested).
+
+Tests only act through the interface (`support/studio.ts` names the recurring gestures; `support/test.ts` provides the `studio` fixture). Tests that change data create tables with unique names. To add a flow: a `tests/<area>.spec.ts` with the fixture; test data belongs in `fixtures/seed.sql`. The Playwright version in `e2e/package.json` must match the image tag in `docker/tests.Dockerfile`.
+
 ## Conventions
 
 - Never call `window.confirm/alert/prompt`: the webview places them at arbitrary spots. Use `useDialogs()` (`confirm`, `alert`, `prompt`; all async, in `src/hooks/useDialogs.tsx`).

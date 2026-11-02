@@ -1,0 +1,8 @@
+# Keep builds hermetic and fast: nothing from the host's working tree beyond the sources.
+.git
+**/node_modules
+dist
+src-tauri/target
+src-tauri/gen
+e2e/reports
+e2e/node_modules

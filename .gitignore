@@ -8,3 +8,5 @@ src-tauri/icons/ios
 .env*
 *.log
 .DS_Store
+e2e/reports
+e2e/node_modules
