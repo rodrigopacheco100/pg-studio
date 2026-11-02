@@ -2,6 +2,19 @@
 
 Newest first. Each release adds its section here (see `.github/workflows/release.yml`); the app bundles this file to show what changed after an update.
 
+## v1.0.0 - 2026-11-02
+
+- feat: update the app at startup and show what changed after an update (50db59a)
+- feat: tag connections with an environment (dev, staging, prod) (7460823)
+- test: isolated end-to-end suite with Playwright and Docker Compose (d33ee56)
+- feat: end-to-end test server on Tauri's mock runtime (74caf41)
+- feat: list and forget known SSH servers in Settings (2641de1)
+- fix: keep the master password prompt open and show errors inside it (d8f39de)
+- feat: replace the native context menu with per-place menus (3846b69)
+- feat: tabbed preferences with theme, font sizes, editor, query and vault options (b02dea6)
+- fix: show the server's error when a TLS connection fails (27798c2)
+- feat: confirm before running DROP, TRUNCATE and DELETE/UPDATE without WHERE (0b0fc07)
+
 ## v0.5.0 - 2026-11-02
 
 - refactor: split the Tauri backend into commands, state, storage, pg and persist modules (fe828a5)
