@@ -48,27 +48,42 @@ export function Sidebar(p: Props) {
         </Button>
       </SectionHeader>
       <ul className="px-1.5">
-        {p.connections.map((c) => (
-          <li
-            key={c.id}
-            onClick={() => p.onToggle(c)}
-            className={cn(
-              "group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-sidebar-accent",
-              c.id === p.activeId && "bg-sidebar-accent font-medium text-sidebar-primary",
-            )}
-          >
-            <Database className="size-4 shrink-0" />
-            <span className="flex-1 truncate" title={`${c.user}@${c.host}:${c.port}/${c.database}`}>{c.name}</span>
-            <span className="hidden gap-0.5 group-hover:flex">
-              <Button variant="ghost" size="icon-xs" title="Edit" onClick={(e) => { e.stopPropagation(); p.onEdit(c); }}>
-                <Pencil />
-              </Button>
-              <Button variant="ghost" size="icon-xs" title="Delete" onClick={(e) => { e.stopPropagation(); p.onDelete(c); }}>
-                <Trash2 />
-              </Button>
-            </span>
-          </li>
-        ))}
+        {/* Once connected, only the active connection stays, giving the tables the room; disconnecting lists all again. */}
+        {p.connections
+          .filter((c) => p.activeId === null || c.id === p.activeId)
+          .map((c) => (
+            <li
+              key={c.id}
+              onClick={() => p.onToggle(c)}
+              className={cn(
+                "group relative flex cursor-pointer items-center gap-2 rounded-md px-2 py-1 text-sm hover:bg-sidebar-accent",
+                c.id === p.activeId && "bg-sidebar-accent font-medium text-sidebar-primary",
+              )}
+            >
+              <Database className="size-4 shrink-0" />
+              <span className="min-w-0 flex-1" title={`${c.user}@${c.host}:${c.port}/${c.database}`}>
+                <span className="block truncate">{c.name}</span>
+                {/* Follows the name's color (selection) but a bit dimmer. */}
+                <span
+                  className={cn(
+                    "block truncate text-xs font-normal",
+                    c.id === p.activeId ? "text-sidebar-primary/70" : "text-muted-foreground",
+                  )}
+                >
+                  {c.user}@{c.host}:{c.port}/{c.database}
+                </span>
+              </span>
+              {/* Overlaid instead of laid out, so showing it on hover never changes the row's size. */}
+              <span className="absolute inset-y-0 right-1 hidden items-center gap-0.5 rounded-md bg-sidebar-accent pl-1 group-hover:flex">
+                <Button variant="ghost" size="icon-xs" title="Edit" onClick={(e) => { e.stopPropagation(); p.onEdit(c); }}>
+                  <Pencil />
+                </Button>
+                <Button variant="ghost" size="icon-xs" title="Delete" onClick={(e) => { e.stopPropagation(); p.onDelete(c); }}>
+                  <Trash2 />
+                </Button>
+              </span>
+            </li>
+          ))}
         {p.connections.length === 0 && (
           <li className="px-2 py-1.5 text-sm text-muted-foreground">No connections. Click + to create one.</li>
         )}
