@@ -7,7 +7,9 @@ import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { errText } from "./api";
 import { useConnections } from "./hooks/useConnections";
+import { useSession } from "./hooks/useSession";
 import { useSettings } from "./hooks/useSettings";
+import { useDocuments } from "./hooks/useDocuments";
 import { useResults } from "./hooks/useResults";
 import type { Conn } from "./types";
 import { HistoryView } from "./views/HistoryView";
@@ -17,10 +19,11 @@ import { SavedView } from "./views/SavedView";
 type View = "query" | "history" | "saved";
 
 export function App() {
-  const ws = useConnections();
+  const session = useSession();
+  const ws = useConnections(session.initial.connectionId);
   const results = useResults();
   const [view, setView] = useState<View>("query");
-  const [sql, setSql] = useState("");
+  const documents = useDocuments();
   /** `undefined` = closed, `null` = new connection, `Conn` = editing. */
   const [dialog, setDialog] = useState<Conn | null | undefined>(undefined);
 
@@ -55,6 +58,7 @@ export function App() {
     try {
       if (c.id === ws.activeId) await ws.disconnect();
       else await ws.connect(c.id!);
+      session.update({ connectionId: ws.activeId === c.id ? null : c.id });
       resetWorkspace();
     } catch (e) {
       alert(`Failed to connect:\n${errText(e)}`);
@@ -65,11 +69,14 @@ export function App() {
     if (!confirm("Delete this connection?")) return;
     const wasActive = c.id === ws.activeId;
     await ws.remove(c.id!);
-    if (wasActive) resetWorkspace();
+    if (wasActive) {
+      session.update({ connectionId: null });
+      resetWorkspace();
+    }
   }
 
   function useSql(text: string) {
-    setSql(text);
+    documents.create(text);
     setView("query");
   }
 
@@ -103,7 +110,7 @@ export function App() {
           <div className="flex min-h-0 flex-1 flex-col">
             {/* Kept mounted to preserve the editor (cursor, undo) when switching tabs. */}
             <div className="flex min-h-0 flex-1 flex-col" hidden={view !== "query"}>
-              <QueryView sql={sql} tables={ws.tables} onSqlChange={setSql} results={results} />
+              <QueryView documents={documents} tables={ws.tables} results={results} visible={view === "query"} />
             </div>
             {view === "history" && <HistoryView onUse={useSql} />}
             {view === "saved" && <SavedView onUse={useSql} />}

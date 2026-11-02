@@ -7,11 +7,13 @@ A lightweight desktop client for PostgreSQL, built with Tauri 2 (Rust) and React
 - Saved connections (with optional SSL), opened and closed from the sidebar
 - Table list of the connected database; click one to browse its contents, paginated
 - SQL editor (CodeMirror) with table and column autocomplete
+- Editor tabs: create, open, save and save as `.sql` files (`Ctrl+T`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+W`), with an unsaved-changes marker
 - A ▶ button beside the first line of each statement runs just that statement
 - `Ctrl+Enter` runs the selection or the whole editor, `Ctrl+Shift+Enter` runs the statement at the cursor, `Ctrl+Space` autocompletes
 - Query history and named saved queries
 - Results with cell selection and copy as JSON, CSV, TSV and INSERT
 - Automatic reconnection when the connection drops, with a notice in the status bar
+- The app reopens as you left it: open tabs (including unsaved text) and the active connection
 - Resizable sidebar and editor; sizes are remembered between sessions
 
 ## Requirements
@@ -39,6 +41,7 @@ Stored in the app data directory of your operating system:
 |---|---|
 | `pg-studio.sqlite` | saved connections, history and saved queries |
 | `settings.json` | program settings (sidebar width and editor height) |
+| `session.json` | open editor tabs (including unsaved text) and the active connection |
 
 Connection passwords are stored in the SQLite file unencrypted.
 
