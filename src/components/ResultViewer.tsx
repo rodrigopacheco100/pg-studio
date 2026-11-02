@@ -51,10 +51,12 @@ interface GridRowProps {
   /** Selected column ranges in this row ("0-2,5-5"); empty if none. */
   sig: string;
   fullRow: boolean;
+  /** Column types of the result; boolean cells are shown in italics. */
+  types: string[];
 }
 
 /** Memoized: dragging the selection only re-renders the rows whose selection changed. */
-const GridRow = memo(function GridRow({ row, r, sig, fullRow }: GridRowProps) {
+const GridRow = memo(function GridRow({ row, r, sig, fullRow, types }: GridRowProps) {
   const segs = sig ? sig.split(",").map((s) => s.split("-").map(Number)) : [];
   const isSel = (c: number) => segs.some(([a, b]) => c >= a && c <= b);
   return (
@@ -76,7 +78,8 @@ const GridRow = memo(function GridRow({ row, r, sig, fullRow }: GridRowProps) {
           title={v ?? undefined}
           className={cn(
             "max-w-105 truncate border-r border-b px-3 py-1 whitespace-nowrap",
-            v === null && "text-muted-foreground italic",
+            (v === null || types[c] === "bool") && "italic",
+            v === null && "text-muted-foreground",
             isSel(c) && "bg-primary/25",
           )}
         >
@@ -246,6 +249,7 @@ export function ResultViewer({ result, table }: Props) {
   function project(rows: number[], cols: number[]) {
     return {
       names: cols.map((c) => result.columns[c]),
+      types: cols.map((c) => result.types[c]),
       data: rows.map((r) => cols.map((c) => result.rows[r][c])) as Row[],
     };
   }
@@ -266,7 +270,7 @@ export function ResultViewer({ result, table }: Props) {
   }
 
   function menuItems(m: MenuState): MenuItem[] {
-    const { names, data } = project(m.rows, m.cols);
+    const { names, types, data } = project(m.rows, m.cols);
     const lines = data.length === 1 ? "1 row" : `${data.length} rows`;
     const partial = names.length < result.columns.length;
     const size = `${lines} × ${names.length} cols.`;
@@ -274,12 +278,12 @@ export function ResultViewer({ result, table }: Props) {
     const cell = result.rows[m.cell.r]?.[m.cell.c] ?? null;
     return [
       // Whole rows, without having to select all the columns.
-      { label: `View ${lines} as JSON`, onSelect: () => setJson(toJson(result.columns, allColumns(m.rows))) },
+      { label: `View ${lines} as JSON`, onSelect: () => setJson(toJson(result.columns, allColumns(m.rows), result.types)) },
       ...(partial
-        ? [{ label: `View selection (${size}) as JSON`, onSelect: () => setJson(toJson(names, data)) }]
+        ? [{ label: `View selection (${size}) as JSON`, onSelect: () => setJson(toJson(names, data, types)) }]
         : []),
       { separator: true },
-      { label: "Copy as JSON", onSelect: () => copy(toJson(names, data), "JSON") },
+      { label: "Copy as JSON", onSelect: () => copy(toJson(names, data, types), "JSON") },
       { label: "Copy as CSV", onSelect: () => copy(toCsv(names, data), "CSV") },
       { label: "Copy as TSV", onSelect: () => copy(toTsv(names, data), "TSV") },
       ...(table
@@ -350,7 +354,7 @@ export function ResultViewer({ result, table }: Props) {
             </thead>
             <tbody>
               {result.rows.slice(0, shown).map((row, r) => (
-                <GridRow key={r} row={row} r={r} sig={rowSel[r].sig} fullRow={rowSel[r].full} />
+                <GridRow key={r} row={row} r={r} sig={rowSel[r].sig} fullRow={rowSel[r].full} types={result.types} />
               ))}
             </tbody>
           </table>

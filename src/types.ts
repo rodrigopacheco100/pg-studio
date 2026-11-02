@@ -29,6 +29,8 @@ export interface TableRef {
 export interface QueryResult {
   columns: string[];
   rows: (string | null)[][];
+  /** PostgreSQL type name per column (`bool`, `int4`…); empty when unknown. */
+  types: string[];
   affected: number | null;
 }
 

@@ -12,6 +12,15 @@ test("toJson keeps NULL and dedupes repeated columns", () => {
   expect(JSON.parse(toJson(["id", "id"], [["1", "2"]]))).toEqual([{ id: "1", id_2: "2" }]);
 });
 
+test("toJson nests json/jsonb columns as JSON and keeps invalid ones as text", () => {
+  const out = JSON.parse(toJson(["id", "doc", "raw"], [["1", '{"a":[1,2],"b":null}', "not json"], ["2", null, "x"]], ["int4", "jsonb", "json"]));
+  expect(out[0]).toEqual({ id: "1", doc: { a: [1, 2], b: null }, raw: "not json" });
+  expect(out[1].doc).toBeNull();
+  // Without types (or for text columns) the value stays a string.
+  expect(JSON.parse(toJson(["doc"], [['{"a":1}']]))[0].doc).toBe('{"a":1}');
+  expect(JSON.parse(toJson(["doc"], [['{"a":1}']], ["text"]))[0].doc).toBe('{"a":1}');
+});
+
 test("toCsv escapes quotes and commas", () => {
   expect(toCsv(cols, rows)).toBe('id,name\n1,"Ana, ""A"""\n2,');
 });

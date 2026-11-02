@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { api, errText } from "../api";
+import { splitStatements } from "../lib/statements";
 import type { QueryResult, RunInfo, TableRef } from "../types";
 
 export const PAGE_SIZE = 100;
@@ -44,7 +45,7 @@ export function useResults() {
     setInfo({ label, status: "running" });
     const started = performance.now();
     try {
-      const out = await api.runQuery(sql);
+      const out = await api.runQuery(sql, splitStatements(sql).map((r) => sql.slice(r.from, r.to)));
       if (id !== current.current) return;
       const last = out.results[out.results.length - 1];
       setOutcome({ kind: "ok", results: out.results });

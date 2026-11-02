@@ -13,7 +13,8 @@ export const api = {
   disconnect: () => invoke<void>("disconnect"),
   refreshTables: () => invoke<TableInfo[]>("refresh_tables"),
 
-  runQuery: (sql: string) => invoke<QueryOutput>("run_query", { sql }),
+  /** `statements` are the individual statements of `sql`; the backend uses them to learn the column types. */
+  runQuery: (sql: string, statements: string[]) => invoke<QueryOutput>("run_query", { sql, statements }),
   tableData: (schema: string, table: string, limit: number, offset: number) =>
     invoke<QueryResult>("table_data", { schema, table, limit, offset }),
 
