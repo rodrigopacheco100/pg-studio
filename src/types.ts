@@ -7,6 +7,13 @@ export interface Conn {
   user: string;
   password: string;
   ssl: boolean;
+  /** Folder the connection is filed under; `null` = top level. */
+  folder_id: number | null;
+}
+
+export interface Folder {
+  id: number;
+  name: string;
 }
 
 export interface ColumnInfo {

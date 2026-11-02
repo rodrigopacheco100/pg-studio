@@ -14,7 +14,7 @@ import { useSettings } from "./hooks/useSettings";
 import { useDialogs } from "./hooks/useDialogs";
 import { useDocuments } from "./hooks/useDocuments";
 import { useResults } from "./hooks/useResults";
-import type { Conn } from "./types";
+import type { Conn, Folder } from "./types";
 import { HistoryView } from "./views/HistoryView";
 import { QueryView, type QueryViewHandle } from "./views/QueryView";
 import { SavedView } from "./views/SavedView";
@@ -81,6 +81,21 @@ export function App() {
     }
   }
 
+  async function newFolder() {
+    const name = (await dialogs.prompt("Folder name", "New folder"))?.trim();
+    if (name) await ws.createFolder(name).catch((e) => dialogs.alert(errText(e)));
+  }
+
+  async function renameFolder(f: Folder) {
+    const name = (await dialogs.prompt(`New name for "${f.name}"`, "Rename folder"))?.trim();
+    if (name) await ws.renameFolder(f.id, name).catch((e) => dialogs.alert(errText(e)));
+  }
+
+  async function deleteFolder(f: Folder) {
+    if (!(await dialogs.confirm(`Delete folder "${f.name}"? Its connections are kept at the top level.`, { title: "Delete folder", confirmLabel: "Delete" }))) return;
+    await ws.deleteFolder(f.id).catch((e) => dialogs.alert(errText(e)));
+  }
+
   function useSql(text: string) {
     documents.create(text);
     setView("query");
@@ -108,6 +123,12 @@ export function App() {
         />
         <Sidebar
           connections={ws.connections}
+          folders={ws.folders}
+          onMoveConnection={ws.move}
+          onMoveFolder={ws.moveFolder}
+          onNewFolder={() => void newFolder()}
+          onRenameFolder={(f) => void renameFolder(f)}
+          onDeleteFolder={(f) => void deleteFolder(f)}
           activeId={ws.activeId}
           tables={ws.tables}
           onNew={() => setDialog(null)}

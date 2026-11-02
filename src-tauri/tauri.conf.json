@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "PG Studio", "width": 1280, "height": 800, "minWidth": 800, "minHeight": 500 }],
+    "windows": [{ "title": "PG Studio", "width": 1280, "height": 800, "minWidth": 800, "minHeight": 500, "dragDropEnabled": false }],
     "security": { "csp": null }
   },
   "bundle": {

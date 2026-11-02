@@ -18,10 +18,11 @@ interface Draft {
   user: string;
   password: string;
   ssl: boolean;
+  folder_id: number | null;
 }
 
 const EMPTY: Draft = {
-  id: null, name: "", host: "localhost", port: "5432", database: "postgres", user: "postgres", password: "", ssl: false,
+  id: null, name: "", host: "localhost", port: "5432", database: "postgres", user: "postgres", password: "", ssl: false, folder_id: null,
 };
 
 const toDraft = (c: Conn): Draft => ({ ...c, port: String(c.port) });
@@ -47,7 +48,7 @@ export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
   const [msg, setMsg] = useState<{ text: string; kind: "" | "ok" | "error" }>({ text: "", kind: "" });
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }));
-  const text = (key: Exclude<keyof Draft, "id" | "ssl">) => ({
+  const text = (key: Exclude<keyof Draft, "id" | "ssl" | "folder_id">) => ({
     id: `conn-${key}`,
     value: draft[key],
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => set(key, e.target.value),
@@ -83,7 +84,7 @@ export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
     }
   }
 
-  const field = (key: Exclude<keyof Draft, "id" | "ssl">, label: string, props: React.ComponentProps<"input"> = {}) => (
+  const field = (key: Exclude<keyof Draft, "id" | "ssl" | "folder_id">, label: string, props: React.ComponentProps<"input"> = {}) => (
     <div className="grid gap-1.5">
       <Label htmlFor={`conn-${key}`}>{label}</Label>
       <Input {...text(key)} {...props} />

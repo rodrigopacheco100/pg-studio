@@ -14,6 +14,22 @@ pub struct ConnectionConfig {
     pub user: String,
     pub password: String,
     pub ssl: bool,
+    /// Folder the connection is filed under; `None` = top level. Not touched by `save_connection` on update (see `reorder_connections`).
+    #[serde(default)]
+    pub folder_id: Option<i64>,
+}
+
+#[derive(Serialize)]
+pub struct Folder {
+    pub id: i64,
+    pub name: String,
+}
+
+/// One entry of the new connection order: its position is its index in the list.
+#[derive(Deserialize)]
+pub struct Placement {
+    pub id: i64,
+    pub folder_id: Option<i64>,
 }
 
 #[derive(Serialize)]
@@ -47,6 +63,11 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
              password TEXT NOT NULL DEFAULT '',
              ssl INTEGER NOT NULL DEFAULT 0
          );
+         CREATE TABLE IF NOT EXISTS connection_folders (
+             id INTEGER PRIMARY KEY,
+             name TEXT NOT NULL,
+             position INTEGER NOT NULL DEFAULT 0
+         );
          CREATE TABLE IF NOT EXISTS history (
              id INTEGER PRIMARY KEY,
              sql TEXT NOT NULL,
@@ -60,12 +81,23 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
              sql TEXT NOT NULL
          );",
     )?;
+    // Columns added after the first release.
+    let has = |col: &str| -> rusqlite::Result<bool> {
+        db.query_row("SELECT COUNT(*) FROM pragma_table_info('connections') WHERE name = ?1", [col], |r| r.get::<_, i64>(0))
+            .map(|n| n > 0)
+    };
+    if !has("folder_id")? {
+        db.execute("ALTER TABLE connections ADD COLUMN folder_id INTEGER", [])?;
+    }
+    if !has("position")? {
+        db.execute("ALTER TABLE connections ADD COLUMN position INTEGER NOT NULL DEFAULT 0", [])?;
+    }
     Ok(db)
 }
 
 pub fn list_connections(db: &Connection) -> rusqlite::Result<Vec<ConnectionConfig>> {
     let mut stmt = db.prepare(
-        "SELECT id, name, host, port, database, user, password, ssl FROM connections ORDER BY name",
+        "SELECT id, name, host, port, database, user, password, ssl, folder_id FROM connections ORDER BY position, name, id",
     )?;
     let rows = stmt.query_map([], row_to_connection)?;
     rows.collect()
@@ -73,7 +105,7 @@ pub fn list_connections(db: &Connection) -> rusqlite::Result<Vec<ConnectionConfi
 
 pub fn get_connection(db: &Connection, id: i64) -> rusqlite::Result<ConnectionConfig> {
     db.query_row(
-        "SELECT id, name, host, port, database, user, password, ssl FROM connections WHERE id = ?1",
+        "SELECT id, name, host, port, database, user, password, ssl, folder_id FROM connections WHERE id = ?1",
         [id],
         row_to_connection,
     )
@@ -89,6 +121,7 @@ fn row_to_connection(r: &rusqlite::Row) -> rusqlite::Result<ConnectionConfig> {
         user: r.get(5)?,
         password: r.get(6)?,
         ssl: r.get::<_, i64>(7)? != 0,
+        folder_id: r.get(8)?,
     })
 }
 
@@ -103,8 +136,9 @@ pub fn save_connection(db: &Connection, c: &ConnectionConfig) -> rusqlite::Resul
         }
         None => {
             db.execute(
-                "INSERT INTO connections (name, host, port, database, user, password, ssl) VALUES (?1,?2,?3,?4,?5,?6,?7)",
-                params![c.name, c.host, c.port, c.database, c.user, c.password, c.ssl],
+                "INSERT INTO connections (name, host, port, database, user, password, ssl, folder_id, position)
+                 VALUES (?1,?2,?3,?4,?5,?6,?7,?8, (SELECT COALESCE(MAX(position), 0) + 1 FROM connections))",
+                params![c.name, c.host, c.port, c.database, c.user, c.password, c.ssl, c.folder_id],
             )?;
             Ok(db.last_insert_rowid())
         }
@@ -114,6 +148,50 @@ pub fn save_connection(db: &Connection, c: &ConnectionConfig) -> rusqlite::Resul
 pub fn delete_connection(db: &Connection, id: i64) -> rusqlite::Result<()> {
     db.execute("DELETE FROM connections WHERE id = ?1", [id])?;
     Ok(())
+}
+
+/// Rewrites folder and position of the connections in one transaction.
+pub fn reorder_connections(db: &Connection, items: &[Placement]) -> rusqlite::Result<()> {
+    let tx = db.unchecked_transaction()?;
+    for (i, p) in items.iter().enumerate() {
+        tx.execute("UPDATE connections SET folder_id = ?1, position = ?2 WHERE id = ?3", params![p.folder_id, i as i64, p.id])?;
+    }
+    tx.commit()
+}
+
+pub fn list_folders(db: &Connection) -> rusqlite::Result<Vec<Folder>> {
+    let mut stmt = db.prepare("SELECT id, name FROM connection_folders ORDER BY position, id")?;
+    let rows = stmt.query_map([], |r| Ok(Folder { id: r.get(0)?, name: r.get(1)? }))?;
+    rows.collect()
+}
+
+pub fn create_folder(db: &Connection, name: &str) -> rusqlite::Result<i64> {
+    db.execute(
+        "INSERT INTO connection_folders (name, position) VALUES (?1, (SELECT COALESCE(MAX(position), 0) + 1 FROM connection_folders))",
+        [name],
+    )?;
+    Ok(db.last_insert_rowid())
+}
+
+pub fn rename_folder(db: &Connection, id: i64, name: &str) -> rusqlite::Result<()> {
+    db.execute("UPDATE connection_folders SET name = ?1 WHERE id = ?2", params![name, id])?;
+    Ok(())
+}
+
+/// Connections inside go back to the top level.
+pub fn delete_folder(db: &Connection, id: i64) -> rusqlite::Result<()> {
+    let tx = db.unchecked_transaction()?;
+    tx.execute("UPDATE connections SET folder_id = NULL WHERE folder_id = ?1", [id])?;
+    tx.execute("DELETE FROM connection_folders WHERE id = ?1", [id])?;
+    tx.commit()
+}
+
+pub fn reorder_folders(db: &Connection, ids: &[i64]) -> rusqlite::Result<()> {
+    let tx = db.unchecked_transaction()?;
+    for (i, id) in ids.iter().enumerate() {
+        tx.execute("UPDATE connection_folders SET position = ?1 WHERE id = ?2", params![i as i64, id])?;
+    }
+    tx.commit()
 }
 
 pub fn add_history(

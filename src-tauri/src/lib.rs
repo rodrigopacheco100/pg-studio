@@ -5,7 +5,7 @@ mod pg;
 mod session;
 mod settings;
 
-use local::{ConnectionConfig, HistoryEntry, SavedQuery};
+use local::{ConnectionConfig, Folder, HistoryEntry, Placement, SavedQuery};
 use pg::{DetailItem, QueryResult, TableInfo};
 use session::{Session, SessionStore};
 use settings::{Settings, SettingsStore};
@@ -82,6 +82,36 @@ fn save_connection(state: State<AppState>, config: ConnectionConfig) -> CmdResul
 #[tauri::command]
 fn delete_connection(state: State<AppState>, id: i64) -> CmdResult<()> {
     state.store(|db| local::delete_connection(db, id))
+}
+
+#[tauri::command]
+fn reorder_connections(state: State<AppState>, items: Vec<Placement>) -> CmdResult<()> {
+    state.store(|db| local::reorder_connections(db, &items))
+}
+
+#[tauri::command]
+fn list_folders(state: State<AppState>) -> CmdResult<Vec<Folder>> {
+    state.store(local::list_folders)
+}
+
+#[tauri::command]
+fn create_folder(state: State<AppState>, name: String) -> CmdResult<i64> {
+    state.store(|db| local::create_folder(db, &name))
+}
+
+#[tauri::command]
+fn rename_folder(state: State<AppState>, id: i64, name: String) -> CmdResult<()> {
+    state.store(|db| local::rename_folder(db, id, &name))
+}
+
+#[tauri::command]
+fn delete_folder(state: State<AppState>, id: i64) -> CmdResult<()> {
+    state.store(|db| local::delete_folder(db, id))
+}
+
+#[tauri::command]
+fn reorder_folders(state: State<AppState>, ids: Vec<i64>) -> CmdResult<()> {
+    state.store(|db| local::reorder_folders(db, &ids))
 }
 
 #[tauri::command]
@@ -237,6 +267,12 @@ pub fn run() {
             list_connections,
             save_connection,
             delete_connection,
+            reorder_connections,
+            list_folders,
+            create_folder,
+            rename_folder,
+            delete_folder,
+            reorder_folders,
             test_connection,
             connect,
             disconnect,

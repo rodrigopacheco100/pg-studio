@@ -69,6 +69,10 @@ Values are integers (`u32` in Rust); round before saving.
 
 Double-clicking an item opens `ItemDetailsDialog`, which calls `table_item(schema, table, kind, name)`: `pg::table_item` builds one JSON document per kind in SQL (`json_build_object` over `pg_catalog`), typed in `src/types.ts` (`ColumnDetails`, `ConstraintDetails`, `ForeignKeyDetails`, `IndexDetails`, `PermissionDetails`, mapped by `ItemDetailsMap`). `src/components/itemScreens.tsx` has one screen per kind plus the shared blocks (`Properties`, `Section`, `Table`, `Code`). A new kind needs: the SQL branch, its type + `ItemDetailsMap` entry, and a screen.
 
+## Connection folders and ordering
+
+Stored in `pg-studio.sqlite`: table `connection_folders` (id, name, position) and columns `folder_id`/`position` on `connections` (added by `local::open` on older databases; ties fall back to the name). Folders are flat. `Sidebar` uses native HTML5 drag and drop (hence `dragDropEnabled: false` on the window in `tauri.conf.json`): drop a connection on a folder (end of it), on a connection (before it, in its folder) or on the strip below the list (top level); drop a folder on a folder (before it) or on the strip (end). `lib/connectionOrder.ts` computes the new order (tested), `useConnections` applies it optimistically and persists the whole order via `reorder_connections` / `reorder_folders`. Deleting a folder moves its connections to the top level. While connected only the active connection is shown, without dragging. Collapsed folders are UI state only.
+
 ## Menu and preferences
 
 - `AppMenu` (`src/components/AppMenu.tsx`, radix menubar in `ui/menubar.tsx`) is the menu bar: File, Query, Connection, Settings. It only receives callbacks (`MenuActions`); `App` wires them to `useDocuments`, the connections hook and `QueryView`'s handle (`QueryViewHandle`: run, runAtCursor, format, saveQuery). Keyboard shortcuts are handled in `QueryView`; the menu only displays them, so keep both in sync.

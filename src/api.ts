@@ -1,12 +1,18 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { Conn, DetailItem, DetailKind, ItemDetailsMap, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, TableInfo } from "./types";
+import type { Conn, DetailItem, Folder, DetailKind, ItemDetailsMap, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, TableInfo } from "./types";
 
 /** One typed wrapper per Tauri command defined in src-tauri/src/lib.rs. */
 export const api = {
   listConnections: () => invoke<Conn[]>("list_connections"),
   saveConnection: (config: Conn) => invoke<number>("save_connection", { config }),
   deleteConnection: (id: number) => invoke<void>("delete_connection", { id }),
+  reorderConnections: (items: { id: number; folder_id: number | null }[]) => invoke<void>("reorder_connections", { items }),
+  listFolders: () => invoke<Folder[]>("list_folders"),
+  createFolder: (name: string) => invoke<number>("create_folder", { name }),
+  renameFolder: (id: number, name: string) => invoke<void>("rename_folder", { id, name }),
+  deleteFolder: (id: number) => invoke<void>("delete_folder", { id }),
+  reorderFolders: (ids: number[]) => invoke<void>("reorder_folders", { ids }),
   testConnection: (config: Conn) => invoke<void>("test_connection", { config }),
 
   connect: (id: number) => invoke<TableInfo[]>("connect", { id }),
