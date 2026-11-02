@@ -23,6 +23,14 @@ impl Session {
     }
 }
 
+/// Sets `statement_timeout` for the session; `0` = no limit.
+pub async fn set_statement_timeout(client: &Client, seconds: u32) -> Result<(), String> {
+    client
+        .batch_execute(&format!("SET statement_timeout = {}", u64::from(seconds) * 1000))
+        .await
+        .map_err(|e| error_text(&e, None))
+}
+
 pub async fn open(c: &ConnectionConfig) -> Result<Session, String> {
     let mut cfg = Config::new();
     cfg.host(&c.host)

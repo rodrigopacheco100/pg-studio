@@ -141,7 +141,10 @@
 /* Nothing is selectable by default; only where copying/editing text makes sense. */
 @layer base {
   html {
-    color-scheme: dark; /* barras de rolagem e controles nativos escuros */
+    color-scheme: light; /* scrollbars and native controls (select popups…) follow the theme */
+  }
+  html.dark {
+    color-scheme: dark;
   }
   body {
     -webkit-user-select: none;

@@ -36,9 +36,21 @@ Current settings:
 |---|---|---|
 | `sidebarWidth` | 256 (px) | Sidebar width; limits 180–560 in `Sidebar.tsx` |
 | `editorHeight` | 300 (px) | SQL editor height above the results; minimum 128, maximum 80% of the area (`QueryView.tsx`) |
-| `uiFont` | `roboto` | Interface font id, from `UI_FONTS` in `src/lib/fonts.ts` |
-| `editorFont` | `system-mono` | Editor/code font id, from `EDITOR_FONTS` in `src/lib/fonts.ts` |
+| `theme` | `dark` | `dark` / `light` / `system`; `SettingsProvider` toggles the `dark` class on the root (`useSettings().dark`) |
+| `uiFont`, `editorFont` | `roboto`, `system-mono` | Font ids from `UI_FONTS` / `EDITOR_FONTS` in `src/lib/fonts.ts` |
+| `uiFontSize` | 16 (px) | Root font size (Tailwind is rem-based) |
+| `editorFontSize` | 13 (px) | CSS variable `--app-editor-font-size`, read by the CodeMirror theme |
+| `tabSize` | 2 | Editor indentation and Beautify width |
+| `lineNumbers` | `true` | Editor gutter (hidden by CSS, so it can change live) |
+| `keywordCase` | `upper` | Beautify: `upper` / `lower` / `preserve` |
+| `pageSize` | 100 | Rows per results page (`useResults`); changing it returns to page 1 |
+| `statementTimeoutSeconds` | 0 | `SET statement_timeout` on every session (`AppState::open_session`) and on the active one when changed; 0 = no limit |
 | `confirmDestructive` | `true` | Ask before running destructive statements (`QueryView.run`) |
+| `restoreConnection` | `true` | Reconnect to the session's last connection at startup (`App`) |
+| `vaultAutoLockMinutes` | 0 | Lock the master-password vault after this idle time (`AppState::watch_vault_idle`); 0 = never |
+| `confirmCloseDirty` | `true` | Ask before closing a tab with unsaved changes (`useDocuments`) |
+
+`SettingsDialog` groups them in tabs (Appearance, Editor, Query, General); `Field` (dropdown with presets) and `Toggle` bind one setting each, so a new setting is one more line there.
 
 Values are integers (`u32` in Rust); round before saving.
 

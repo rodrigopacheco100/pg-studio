@@ -1,9 +1,8 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, errText } from "../api";
 import { splitStatements } from "../lib/statements";
+import { useSettings } from "./useSettings";
 import type { QueryResult, RunInfo, TableRef } from "../types";
-
-export const PAGE_SIZE = 100;
 
 export type Outcome =
   | { kind: "running" }
@@ -29,6 +28,7 @@ const tableKey = (t: TableRef) => `${t.schema}.${t.name}`;
  * Only the latest request counts: late responses from older requests are discarded.
  */
 export function useResults() {
+  const pageSize = useSettings().settings.pageSize;
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [source, setSource] = useState<Source>({ kind: "query", page: 0 });
   const [info, setInfo] = useState<RunInfo | null>(null);
@@ -89,7 +89,7 @@ export function useResults() {
       const started = performance.now();
       const elapsed = () => Math.round(performance.now() - started);
       try {
-        const data = await api.tableData(table.schema, table.name, PAGE_SIZE, page * PAGE_SIZE);
+        const data = await api.tableData(table.schema, table.name, pageSize, page * pageSize);
         if (id !== current.current) return;
         setOutcome({ kind: "ok", results: [data] });
         setInfo({ label, status: "ok", durationMs: elapsed(), rows: data.rows.length });
@@ -100,7 +100,7 @@ export function useResults() {
         setInfo({ label, status: "error", durationMs: elapsed(), message });
       }
     },
-    [countInBackground],
+    [countInBackground, pageSize],
   );
 
   const goToPage = useCallback(
@@ -110,6 +110,15 @@ export function useResults() {
     },
     [source, openTable],
   );
+
+  // A new page size invalidates the current page number: start again from the first page.
+  const lastPageSize = useRef(pageSize);
+  useEffect(() => {
+    if (lastPageSize.current === pageSize) return;
+    lastPageSize.current = pageSize;
+    if (source.kind === "table") void openTable(source.table, 0);
+    else setSource({ kind: "query", page: 0 });
+  }, [pageSize, source, openTable]);
 
   const reset = useCallback(() => {
     current.current++;
@@ -123,19 +132,19 @@ export function useResults() {
 
   const paging = useMemo<Paging | null>(() => {
     if (outcome?.kind !== "ok" || !outcome.results.some((r) => r.columns.length > 0)) return null;
-    const pageCountOf = (total: number) => Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const pageCountOf = (total: number) => Math.max(1, Math.ceil(total / pageSize));
     if (source.kind === "table") {
       const pageCount = tableTotal === null ? null : pageCountOf(tableTotal);
       const onPage = outcome.results[0].rows.length;
-      const hasNext = pageCount === null ? onPage === PAGE_SIZE : source.page + 1 < pageCount;
+      const hasNext = pageCount === null ? onPage === pageSize : source.page + 1 < pageCount;
       return { page: source.page, total: tableTotal, pageCount, hasNext };
     }
     const total = Math.max(...outcome.results.map((r) => r.rows.length));
     const pageCount = pageCountOf(total);
     return { page: source.page, total, pageCount, hasNext: source.page + 1 < pageCount };
-  }, [outcome, source, tableTotal]);
+  }, [outcome, source, tableTotal, pageSize]);
 
-  return { outcome, source, info, paging, runQuery, openTable, goToPage, reset };
+  return { outcome, source, info, paging, pageSize, runQuery, openTable, goToPage, reset };
 }
 
 export type ResultsApi = ReturnType<typeof useResults>;

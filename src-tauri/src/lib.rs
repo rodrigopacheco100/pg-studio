@@ -18,6 +18,7 @@ pub fn run() {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             app.manage(AppState::open(app.handle().clone(), &dir)?);
+            AppState::watch_vault_idle(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

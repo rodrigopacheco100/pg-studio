@@ -1,19 +1,19 @@
 import { useMemo } from "react";
-import { PAGE_SIZE, type ResultsApi } from "../hooks/useResults";
+import { type ResultsApi } from "../hooks/useResults";
 import { ResultViewer } from "./ResultViewer";
 
 /** Single results pane: shows the last query or the opened table. Pagination lives in the footer. */
 export function ResultsPane({ results }: { results: ResultsApi }) {
-  const { outcome, source } = results;
+  const { outcome, source, pageSize } = results;
   const table = source.kind === "table" ? source.table : undefined;
 
   // Tables already arrive paginated from the server; queries arrive whole and are sliced here.
   const visible = useMemo(() => {
     if (outcome?.kind !== "ok") return [];
     if (source.kind === "table") return outcome.results;
-    const from = source.page * PAGE_SIZE;
-    return outcome.results.map((r) => ({ ...r, rows: r.rows.slice(from, from + PAGE_SIZE) }));
-  }, [outcome, source]);
+    const from = source.page * pageSize;
+    return outcome.results.map((r) => ({ ...r, rows: r.rows.slice(from, from + pageSize) }));
+  }, [outcome, source, pageSize]);
 
   const msg = "p-4 text-sm text-muted-foreground";
   return (

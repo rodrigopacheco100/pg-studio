@@ -94,11 +94,28 @@ export interface RunInfo {
 export interface Settings {
   sidebarWidth: number;
   editorHeight: number;
+  theme: "dark" | "light" | "system";
   /** Font ids from `src/lib/fonts.ts`. */
   uiFont: string;
   editorFont: string;
+  /** Interface base size and editor text size, in px. */
+  uiFontSize: number;
+  editorFontSize: number;
+  tabSize: number;
+  lineNumbers: boolean;
+  keywordCase: "upper" | "lower" | "preserve";
+  /** Rows per page in the results. */
+  pageSize: number;
+  /** `statement_timeout` of the sessions, in seconds; 0 = no limit. */
+  statementTimeoutSeconds: number;
   /** Ask before running DROP, TRUNCATE, or DELETE / UPDATE without WHERE. */
   confirmDestructive: boolean;
+  /** Reconnect to the last active connection when the app starts. */
+  restoreConnection: boolean;
+  /** Lock the master-password vault after this many idle minutes; 0 = never. */
+  vaultAutoLockMinutes: number;
+  /** Ask before closing a tab with unsaved changes. */
+  confirmCloseDirty: boolean;
 }
 
 /** Mirrors `SessionDoc` in src-tauri/src/session.rs. */

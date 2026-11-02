@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 const KEYRING_SERVICE: &str = "pg-studio";
 /// Encrypted with the key when the vault is created; decrypting it proves the master password.
@@ -71,11 +72,13 @@ pub struct Secrets {
     keychain: OnceLock<Option<String>>,
     file: Mutex<JsonStore<VaultFile>>,
     key: Mutex<Option<[u8; 32]>>,
+    /// Last time the vault key was used, for the idle auto-lock.
+    used: Mutex<Instant>,
 }
 
 impl Secrets {
     pub fn load(path: PathBuf) -> Self {
-        Self { keychain: OnceLock::new(), file: Mutex::new(JsonStore::load(path)), key: Mutex::new(None) }
+        Self { keychain: OnceLock::new(), file: Mutex::new(JsonStore::load(path)), key: Mutex::new(None), used: Mutex::new(Instant::now()) }
     }
 
     /// Probed once per run.
@@ -98,7 +101,7 @@ impl Secrets {
         if self.keychain_problem().is_none() {
             return keychain::get(name);
         }
-        let key = (*self.key.lock().unwrap())?;
+        let key = self.key_in_use()?;
         let blob = self.file.lock().unwrap().get().entries.get(name)?.clone();
         decrypt(&key, &blob).and_then(|b| String::from_utf8(b).ok())
     }
@@ -107,7 +110,7 @@ impl Secrets {
         if self.keychain_problem().is_none() {
             return keychain::set(name, password);
         }
-        let key = (*self.key.lock().unwrap()).ok_or("The password vault is locked")?;
+        let key = self.key_in_use().ok_or("The password vault is locked")?;
         let mut file = self.file.lock().unwrap();
         let mut value = file.get();
         value.entries.insert(name.to_string(), encrypt(&key, password.as_bytes())?);
@@ -125,6 +128,22 @@ impl Secrets {
         }
     }
 
+    /// The vault key, if unlocked; counts as use for the idle auto-lock.
+    fn key_in_use(&self) -> Option<[u8; 32]> {
+        let key = *self.key.lock().unwrap();
+        if key.is_some() {
+            *self.used.lock().unwrap() = Instant::now();
+        }
+        key
+    }
+
+    /// Forgets the vault key if it has not been used for `idle`; the master password is asked again.
+    pub fn lock_if_idle(&self, idle: Duration) {
+        if self.used.lock().unwrap().elapsed() >= idle {
+            *self.key.lock().unwrap() = None;
+        }
+    }
+
     /// First use without a keychain: sets the master password and leaves the vault unlocked.
     pub fn create(&self, master: &str) -> Result<(), String> {
         if master.is_empty() {
@@ -139,6 +158,7 @@ impl Secrets {
         let key = derive(master, &salt)?;
         file.set(VaultFile { salt: B64.encode(salt), check: encrypt(&key, CHECK)?, entries: BTreeMap::new() })?;
         *self.key.lock().unwrap() = Some(key);
+        *self.used.lock().unwrap() = Instant::now();
         Ok(())
     }
 
@@ -150,7 +170,21 @@ impl Secrets {
             return Err("Wrong master password".into());
         }
         *self.key.lock().unwrap() = Some(key);
-        Ok(())
+        *self.used.lock().unwrap() = Instant::now();
+        self.rename_legacy_entries()
+    }
+
+    /// Early vaults named entries by the bare connection id (`5`); they are now `connection-5`.
+    fn rename_legacy_entries(&self) -> Result<(), String> {
+        let mut file = self.file.lock().unwrap();
+        let mut value = file.get();
+        let legacy: Vec<String> = value.entries.keys().filter(|k| k.parse::<i64>().is_ok()).cloned().collect();
+        for old in legacy {
+            if let Some(blob) = value.entries.remove(&old) {
+                value.entries.entry(format!("connection-{old}")).or_insert(blob);
+            }
+        }
+        file.set(value)
     }
 }
 
@@ -181,6 +215,27 @@ fn decrypt(key: &[u8; 32], blob: &str) -> Option<Vec<u8>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn unlock_renames_entries_named_by_bare_id() {
+        let path = std::env::temp_dir().join(format!("pg-studio-vault-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let secrets = Secrets::load(path.clone());
+        secrets.create("master").unwrap();
+        let key = secrets.key_in_use().unwrap();
+        let blob = encrypt(&key, b"pw").unwrap();
+        {
+            let mut file = secrets.file.lock().unwrap();
+            let mut value = file.get();
+            value.entries.insert("7".into(), blob);
+            file.set(value).unwrap();
+        }
+        let reopened = Secrets::load(path.clone());
+        reopened.unlock("master").unwrap();
+        assert!(reopened.keychain.set(Some("test".into())).is_ok()); // force the vault path (no keychain)
+        assert_eq!(reopened.get("connection-7").as_deref(), Some("pw"));
+        let _ = std::fs::remove_file(path);
+    }
 
     #[test]
     fn encrypts_and_rejects_wrong_key() {

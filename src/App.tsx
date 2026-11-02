@@ -26,7 +26,8 @@ export function App() {
   const dialogs = useDialogs();
   const session = useSession();
   const ensureVault = useVault();
-  const ws = useConnections(session.initial.connectionId);
+  const { settings, update } = useSettings();
+  const ws = useConnections(settings.restoreConnection ? session.initial.connectionId : null);
   const results = useResults();
   const [view, setView] = useState<View>("query");
   const documents = useDocuments();
@@ -36,7 +37,6 @@ export function App() {
   const [restored, setRestored] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const queryView = useRef<QueryViewHandle>(null);
-  const { settings, update } = useSettings();
 
   // The backend reopens the connection by itself when it drops; warns because the database session starts over.
   useEffect(() => {

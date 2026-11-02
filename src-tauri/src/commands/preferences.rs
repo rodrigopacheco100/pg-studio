@@ -11,8 +11,18 @@ pub fn get_settings(state: State<AppState>) -> CmdResult<Settings> {
 }
 
 #[tauri::command]
-pub fn set_settings(state: State<AppState>, settings: Settings) -> CmdResult<()> {
-    state.settings()?.set(settings)
+pub async fn set_settings(state: State<'_, AppState>, settings: Settings) -> CmdResult<()> {
+    let timeout_changed = {
+        let mut store = state.settings()?;
+        let changed = store.get().statement_timeout_seconds != settings.statement_timeout_seconds;
+        store.set(settings)?;
+        changed
+    };
+    if timeout_changed {
+        // Best effort: the setting is saved either way, and new sessions pick it up.
+        let _ = state.apply_statement_timeout().await;
+    }
+    Ok(())
 }
 
 #[tauri::command]

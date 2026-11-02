@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { errText, files } from "../api";
 import { useDialogs } from "./useDialogs";
+import { useSettings } from "./useSettings";
 import { useSession } from "./useSession";
 
 export interface Doc {
@@ -21,6 +22,7 @@ const baseName = (path: string) => path.split(/[\\/]/).pop() ?? path;
 export function useDocuments() {
   const session = useSession();
   const dialogs = useDialogs();
+  const { confirmCloseDirty } = useSettings().settings;
   const restored = session.initial.docs;
   const nextId = useRef(Math.max(0, ...restored.map((d) => d.id)) + 1);
   const untitled = useRef(Math.max(0, ...restored.map((d) => Number(/^Untitled-(\d+)$/.exec(d.name)?.[1] ?? 0))));
@@ -62,7 +64,7 @@ export function useDocuments() {
     } catch (e) {
       void dialogs.alert(`Failed to open file:\n${errText(e)}`);
     }
-  }, [dialogs]);
+  }, [dialogs, confirmCloseDirty]);
 
   const save = useCallback(async (id: number, asNew = false) => {
     const doc = latest.current.find((d) => d.id === id);
@@ -81,7 +83,7 @@ export function useDocuments() {
   const close = useCallback(async (id: number) => {
     const doc = latest.current.find((d) => d.id === id);
     if (!doc) return;
-    if (isDirty(doc) && !(await dialogs.confirm(`Discard unsaved changes to ${doc.name}?`, { title: "Unsaved changes", confirmLabel: "Discard" }))) return;
+    if (confirmCloseDirty && isDirty(doc) && !(await dialogs.confirm(`Discard unsaved changes to ${doc.name}?`, { title: "Unsaved changes", confirmLabel: "Discard" }))) return;
     const rest = latest.current.filter((d) => d.id !== id);
     if (rest.length === 0) {
       const fresh = blank();

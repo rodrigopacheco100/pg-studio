@@ -7,7 +7,8 @@ use crate::storage::{self, connections::ConnectionConfig};
 use crate::tunnel::{self, KnownHosts, Tunnel};
 use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard};
-use tauri::{AppHandle, Emitter};
+use std::time::Duration;
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::Mutex as AsyncMutex;
 use tokio_postgres::Client;
 
@@ -59,6 +60,41 @@ impl AppState {
         Ok(state)
     }
 
+    /// Locks the master-password vault after the configured idle time. Call once, after the state is managed.
+    pub fn watch_vault_idle(app: &AppHandle) {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(30)).await;
+                let state = app.state::<AppState>();
+                let minutes = state.settings().map(|s| s.get().vault_auto_lock_minutes).unwrap_or(0);
+                if minutes > 0 {
+                    state.secrets.lock_if_idle(Duration::from_secs(u64::from(minutes) * 60));
+                }
+            }
+        });
+    }
+
+    /// Opens a session with the configured `statement_timeout`.
+    async fn open_session(&self, config: &ConnectionConfig) -> CmdResult<pg::Session> {
+        let session = pg::open(config).await?;
+        pg::set_statement_timeout(&session.client, self.statement_timeout_seconds()).await?;
+        Ok(session)
+    }
+
+    fn statement_timeout_seconds(&self) -> u32 {
+        self.settings().map(|s| s.get().statement_timeout_seconds).unwrap_or(0)
+    }
+
+    /// Applies the current `statement_timeout` setting to the active connection (after the setting changed).
+    pub async fn apply_statement_timeout(&self) -> CmdResult<()> {
+        let client = match self.active.lock().await.as_ref() {
+            Some(active) => active.client.clone(),
+            None => return Ok(()),
+        };
+        pg::set_statement_timeout(&client, self.statement_timeout_seconds()).await
+    }
+
     /// Runs `f` with the local SQLite. The lock never crosses an `.await`.
     pub fn store<T, E: ToString>(&self, f: impl FnOnce(&rusqlite::Connection) -> Result<T, E>) -> CmdResult<T> {
         f(&*lock(&self.store)?).map_err(|e| e.to_string())
@@ -84,7 +120,7 @@ impl AppState {
     /// Connects and makes it the active connection (replacing any previous one).
     pub async fn connect(&self, origin: ConnectionConfig) -> CmdResult<Vec<pg::TableInfo>> {
         let (tunnel, config) = self.route(&origin).await?;
-        let client = Arc::new(pg::open(&config).await?.client);
+        let client = Arc::new(self.open_session(&config).await?.client);
         let tables = pg::list_tables(&client).await?;
         self.cancel_counting().await;
         *self.active.lock().await = Some(Active { client, config, origin, _tunnel: tunnel });
@@ -116,7 +152,7 @@ impl AppState {
             // A dropped connection may mean a dropped tunnel too: build a new one.
             active._tunnel = None;
             let (tunnel, config) = self.route(&active.origin).await?;
-            active.client = Arc::new(pg::open(&config).await?.client);
+            active.client = Arc::new(self.open_session(&config).await?.client);
             active.config = config;
             active._tunnel = tunnel;
             // The new session lost open transactions, SET, temporary tables, etc.
@@ -133,7 +169,7 @@ impl AppState {
             let active = self.active.lock().await;
             active.as_ref().map(|a| a.config.clone()).ok_or_else(|| "Not connected".to_string())?
         };
-        let session = Arc::new(pg::open(&config).await?);
+        let session = Arc::new(self.open_session(&config).await?);
         if let Some(previous) = self.counting.lock().await.replace(session.clone()) {
             tauri::async_runtime::spawn(async move { previous.cancel().await });
         }
