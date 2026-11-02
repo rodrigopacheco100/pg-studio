@@ -2,6 +2,18 @@
 
 Newest first. Each release adds its section here (see `.github/workflows/release.yml`); the app bundles this file to show what changed after an update.
 
+## v1.2.0 - 2026-11-02
+
+- feat: duplicate a connection; reconnect when the open one is edited (4e10743)
+- feat: background exports with progress windows and a history (27c067c)
+- feat: grid filters with column, operator and value, applied with Search (777a646)
+- feat: export all rows of a result as CSV, JSON or SQL INSERT (1629138)
+- feat: Stop button to cancel the running query (360af14)
+- fix: handle backslash escapes in E'...' strings when splitting statements (575c973)
+- feat: sort and filter the results grid by column (8e32596)
+- feat: SQL snippets at the start of a statement (531ac73)
+- feat: confirm data-modifying CTEs without WHERE and ALTER ... DROP (1de97f9)
+
 ## v1.1.0 - 2026-11-02
 
 - feat: more themes, editor syntax and environment colors from the theme, color editor (1e06d99)
