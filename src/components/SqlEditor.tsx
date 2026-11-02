@@ -3,7 +3,6 @@ import { indentWithTab, selectAll } from "@codemirror/commands";
 import { indentUnit } from "@codemirror/language";
 import { PostgreSQL, sql } from "@codemirror/lang-sql";
 import { Compartment, EditorState, Prec } from "@codemirror/state";
-import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, keymap } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useImperativeHandle, useRef } from "react";
@@ -14,6 +13,7 @@ import { statementAtCursor } from "../lib/statements";
 import { useDialogs } from "../hooks/useDialogs";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { EditMenuItems } from "./EditMenu";
+import { themeHighlighting } from "../lib/syntaxHighlight";
 import { runGutter } from "./runGutter";
 import { errText } from "../api";
 import { createSqlCompletion } from "../lib/sqlComplete";
@@ -38,11 +38,17 @@ interface Props {
   onRun: (sql: string) => void;
 }
 
-/** Uses shadcn's color variables; `oneDark` provides the syntax highlighting in the dark theme. */
+/** Colors come from the theme's CSS variables (the interface tokens here, the `syntax-*` ones in `themeHighlighting`). */
 const baseTheme = EditorView.theme({
   "&": { height: "100%", backgroundColor: "var(--background)", color: "var(--foreground)" },
   "&.cm-focused": { outline: "none" },
   ".cm-gutters": { backgroundColor: "var(--background)", color: "var(--muted-foreground)", border: "none" },
+  ".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--foreground)" },
+  "&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
+    backgroundColor: "color-mix(in oklch, var(--primary) 35%, transparent)",
+  },
+  "&.cm-focused .cm-matchingBracket": { backgroundColor: "color-mix(in oklch, var(--primary) 25%, transparent)" },
+  ".cm-panels": { backgroundColor: "var(--popover)", color: "var(--popover-foreground)" },
   ".cm-activeLine, .cm-activeLineGutter": { backgroundColor: "color-mix(in oklch, var(--muted) 50%, transparent)" },
   ".cm-scroller": { fontFamily: "var(--app-font-mono)", fontSize: "var(--app-editor-font-size)" },
   ".cm-tooltip": {
@@ -60,7 +66,7 @@ const baseTheme = EditorView.theme({
 const hideLineNumbers = EditorView.theme({ ".cm-lineNumbers": { display: "none" } });
 
 /** The parts of the editor that follow the program settings; reconfigured when they change. */
-const appearance = (dark: boolean, lineNumbers: boolean) => [dark ? oneDark : [], lineNumbers ? [] : hideLineNumbers];
+const appearance = (dark: boolean, lineNumbers: boolean) => [EditorView.darkTheme.of(dark), lineNumbers ? [] : hideLineNumbers];
 const indentation = (tabSize: number) => [EditorState.tabSize.of(tabSize), indentUnit.of(" ".repeat(tabSize))];
 
 function getRunText(v: EditorView) {
@@ -166,6 +172,7 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
         appearanceSlot.current.of(appearance(dark, settings.lineNumbers)),
         indentSlot.current.of(indentation(settings.tabSize)),
         baseTheme,
+        themeHighlighting,
         autocompletion({ override: [createSqlCompletion(() => latest.current.tables)] }),
         EditorView.updateListener.of((u) => u.docChanged && latest.current.onChange(u.state.doc.toString())),
       ],

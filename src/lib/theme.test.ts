@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { parseTheme, resolveColors, slugify, type Theme } from "./theme";
+import { COLOR_TOKENS, parseTheme, resolveColors, slugify, TOKEN_GROUPS, tokenGroup, tokenLabel, type Theme } from "./theme";
 
 const theme = (o: object) => JSON.stringify({ name: "Midnight", type: "dark", colors: { background: "#0b1020" }, ...o });
 
@@ -35,4 +35,15 @@ test("a partial theme is completed from the built-in theme of its type", () => {
   ] as Theme[];
   expect(resolveColors({ type: "dark", colors: { background: "X" } }, builtins)).toEqual({ background: "X", foreground: "B" });
   expect(resolveColors({ type: "light", colors: {} }, builtins)).toEqual({ background: "C", foreground: "D" });
+});
+
+test("every token has a group and a distinct label for the color editor", () => {
+  expect(new Set(COLOR_TOKENS.map(tokenLabel)).size).toBe(COLOR_TOKENS.length);
+  for (const token of COLOR_TOKENS) expect(TOKEN_GROUPS).toContain(tokenGroup(token));
+  expect(tokenLabel("sidebar-primary-foreground")).toBe("Sidebar primary foreground");
+  expect(tokenGroup("syntax-keyword")).toBe("Editor syntax");
+  expect(tokenGroup("chart-3")).toBe("Charts");
+  expect(tokenGroup("env-prod")).toBe("Environments");
+  expect(tokenGroup("sidebar")).toBe("Sidebar");
+  expect(tokenGroup("border")).toBe("Interface");
 });

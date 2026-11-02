@@ -68,6 +68,9 @@ export const files = {
 /** A theme JSON file picked by the user; `null` if the dialog was cancelled. */
 export const pickThemeFile = () => open({ multiple: false, filters: [{ name: "Theme", extensions: ["json"] }, { name: "All files", extensions: ["*"] }] });
 
+/** Where to save a theme file; `null` if the dialog was cancelled. */
+export const pickThemeToSave = (defaultPath: string) => save({ defaultPath, filters: [{ name: "Theme", extensions: ["json"] }] });
+
 /** Private key file for the SSH tunnel; `null` if the dialog was cancelled. */
 export const pickKeyFile = () => open({ multiple: false });
 

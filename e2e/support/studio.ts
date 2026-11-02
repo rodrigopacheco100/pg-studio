@@ -150,6 +150,7 @@ export class Studio {
   async choose(field: Locator, option: string) {
     await field.click();
     await this.page.getByRole("option", { name: option, exact: true }).click();
+    await expect(this.page.getByRole("listbox")).toBeHidden(); // closed: a following Escape then reaches the dialog
   }
 
   /** The value of a CSS variable on the page's root element (e.g. a theme color). */

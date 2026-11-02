@@ -9,8 +9,10 @@ interface ThemeApi {
   themes: Theme[];
   /** The theme in effect (`system` resolves to the built-in dark or light one). */
   active: Theme;
-  /** Whether the active theme is dark. */
+  /** Whether the theme in effect is dark. */
   dark: boolean;
+  /** Shows these colors instead of the active theme until called with `null` (the color editor's live preview). */
+  setPreview: (preview: Pick<Theme, "type" | "colors"> | null) => void;
   /** Validates and stores a theme (replacing an imported one with the same id); returns it. Throws if invalid. */
   importTheme: (json: string) => Promise<Theme>;
   removeTheme: (id: string) => Promise<void>;
@@ -33,6 +35,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { settings } = useSettings();
   const [custom, setCustom] = useState<Theme[]>([]);
   const [loaded, setLoaded] = useState(false);
+  const [preview, setPreview] = useState<Pick<Theme, "type" | "colors"> | null>(null);
   const osDark = useSyncExternalStore(subscribeSystemDark, () => systemDark.matches);
 
   const load = useCallback(async () => {
@@ -60,12 +63,13 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     return themes.find((t) => t.id === wanted) ?? BUILTIN_THEMES[0];
   }, [themes, settings.theme, osDark]);
 
+  const shown = preview ?? active;
   useLayoutEffect(() => {
     const root = document.documentElement;
-    const colors = resolveColors(active, BUILTIN_THEMES);
+    const colors = resolveColors(shown, BUILTIN_THEMES);
     for (const token of COLOR_TOKENS) root.style.setProperty(`--${token}`, colors[token]);
-    root.classList.toggle("dark", active.type === "dark");
-  }, [active]);
+    root.classList.toggle("dark", shown.type === "dark");
+  }, [shown]);
 
   const importTheme = useCallback(
     async (json: string) => {
@@ -87,7 +91,7 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   // Wait for the imported themes: otherwise a chosen custom theme would flash as the dark one on startup.
   if (!loaded) return null;
-  return <ThemeContext.Provider value={{ themes, active, dark: active.type === "dark", importTheme, removeTheme }}>{children}</ThemeContext.Provider>;
+  return <ThemeContext.Provider value={{ themes, active, dark: shown.type === "dark", setPreview, importTheme, removeTheme }}>{children}</ThemeContext.Provider>;
 }
 
 export function useTheme(): ThemeApi {

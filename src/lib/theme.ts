@@ -13,6 +13,11 @@ export const COLOR_TOKENS = [
   "sidebar-primary", "sidebar-primary-foreground",
   "sidebar-accent", "sidebar-accent-foreground",
   "sidebar-border", "sidebar-ring",
+  // Colors of the SQL editor's syntax highlighting.
+  "syntax-comment", "syntax-keyword", "syntax-string", "syntax-number",
+  "syntax-function", "syntax-type", "syntax-operator", "syntax-variable",
+  // The environment tags (dev / staging / prod) and the text on them.
+  "env-dev", "env-dev-foreground", "env-staging", "env-staging-foreground", "env-prod", "env-prod-foreground",
 ] as const;
 
 export type ColorToken = (typeof COLOR_TOKENS)[number];
@@ -75,4 +80,21 @@ export function parseTheme(json: string, reservedIds: string[] = []): Omit<Theme
 export function resolveColors(theme: Pick<Theme, "type" | "colors">, builtins: Theme[]): Colors {
   const base = builtins.find((t) => t.builtin && t.id === theme.type);
   return { ...base?.colors, ...theme.colors } as Colors;
+}
+
+export const TOKEN_GROUPS = ["Interface", "Sidebar", "Charts", "Editor syntax", "Environments"] as const;
+
+/** Where a token is shown in the color editor. */
+export function tokenGroup(token: ColorToken): (typeof TOKEN_GROUPS)[number] {
+  if (token.startsWith("sidebar")) return "Sidebar";
+  if (token.startsWith("chart-")) return "Charts";
+  if (token.startsWith("syntax-")) return "Editor syntax";
+  if (token.startsWith("env-")) return "Environments";
+  return "Interface";
+}
+
+/** `sidebar-primary-foreground` -> `Sidebar primary foreground`. */
+export function tokenLabel(token: ColorToken): string {
+  const words = token.replace(/-/g, " ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
 }

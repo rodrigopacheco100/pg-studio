@@ -32,6 +32,20 @@
     "sidebar-accent": "oklch(0.274 0.006 286.033)",
     "sidebar-accent-foreground": "oklch(0.985 0 0)",
     "sidebar-border": "oklch(1 0 0 / 10%)",
-    "sidebar-ring": "oklch(0.552 0.016 285.938)"
+    "sidebar-ring": "oklch(0.552 0.016 285.938)",
+    "syntax-comment": "#7d8799",
+    "syntax-keyword": "#c678dd",
+    "syntax-string": "#98c379",
+    "syntax-number": "#d19a66",
+    "syntax-function": "#61afef",
+    "syntax-type": "#e5c07b",
+    "syntax-operator": "#56b6c2",
+    "syntax-variable": "#e06c75",
+    "env-dev": "#059669",
+    "env-dev-foreground": "#ffffff",
+    "env-staging": "#f59e0b",
+    "env-staging-foreground": "#000000",
+    "env-prod": "#dc2626",
+    "env-prod-foreground": "#ffffff"
   }
 }

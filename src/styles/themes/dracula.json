@@ -32,6 +32,20 @@
     "sidebar-accent": "#44475a",
     "sidebar-accent-foreground": "#f8f8f2",
     "sidebar-border": "#191a21",
-    "sidebar-ring": "#6272a4"
+    "sidebar-ring": "#6272a4",
+    "syntax-comment": "#6272a4",
+    "syntax-keyword": "#ff79c6",
+    "syntax-string": "#f1fa8c",
+    "syntax-number": "#bd93f9",
+    "syntax-function": "#50fa7b",
+    "syntax-type": "#8be9fd",
+    "syntax-operator": "#ff79c6",
+    "syntax-variable": "#f8f8f2",
+    "env-dev": "#059669",
+    "env-dev-foreground": "#ffffff",
+    "env-staging": "#f59e0b",
+    "env-staging-foreground": "#000000",
+    "env-prod": "#dc2626",
+    "env-prod-foreground": "#ffffff"
   }
 }
