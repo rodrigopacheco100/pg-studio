@@ -38,7 +38,7 @@ export function StatusBar({ connection, info, paging, onPage, restored }: Props)
       )}
       {info && (
         <span
-          className={cn("truncate", info.status === "ok" && "text-primary", info.status === "error" && "text-destructive")}
+          className={cn("truncate text-muted-foreground", info.status === "error" && "text-destructive")}
           title={info.message}
         >
           {info.status === "running" && `${info.label} · running…`}
