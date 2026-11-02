@@ -1,9 +1,13 @@
+mod files;
+mod json_store;
 mod local;
 mod pg;
+mod session;
 mod settings;
 
 use local::{ConnectionConfig, HistoryEntry, SavedQuery};
 use pg::{QueryResult, TableInfo};
+use session::{Session, SessionStore};
 use settings::{Settings, SettingsStore};
 use serde::Serialize;
 use std::sync::{Arc, Mutex};
@@ -24,6 +28,7 @@ struct AppState {
     app: AppHandle,
     store: Mutex<rusqlite::Connection>,
     settings: Mutex<SettingsStore>,
+    session: Mutex<SessionStore>,
     active: AsyncMutex<Option<Active>>,
     /// Connection of the count in progress; separate from the main one so it never delays the user's queries.
     counting: AsyncMutex<Option<Arc<pg::Session>>>,
@@ -165,6 +170,16 @@ fn set_settings(state: State<AppState>, settings: Settings) -> CmdResult<()> {
 }
 
 #[tauri::command]
+fn get_session(state: State<AppState>) -> CmdResult<Session> {
+    Ok(state.session.lock().map_err(|e| e.to_string())?.get())
+}
+
+#[tauri::command]
+fn set_session(state: State<AppState>, session: Session) -> CmdResult<()> {
+    state.session.lock().map_err(|e| e.to_string())?.set(session)
+}
+
+#[tauri::command]
 fn list_history(state: State<AppState>) -> CmdResult<Vec<HistoryEntry>> {
     state.store(local::list_history)
 }
@@ -192,11 +207,12 @@ fn delete_saved_query(state: State<AppState>, id: i64) -> CmdResult<()> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let store = local::open(&dir.join("pg-studio.sqlite"))?;
-            app.manage(AppState { app: app.handle().clone(), store: Mutex::new(store), settings: Mutex::new(SettingsStore::load(dir.join("settings.json"))), active: AsyncMutex::new(None), counting: AsyncMutex::new(None) });
+            app.manage(AppState { app: app.handle().clone(), store: Mutex::new(store), settings: Mutex::new(SettingsStore::load(dir.join("settings.json"))), session: Mutex::new(SessionStore::load(dir.join("session.json"))), active: AsyncMutex::new(None), counting: AsyncMutex::new(None) });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -217,6 +233,10 @@ pub fn run() {
             delete_saved_query,
             get_settings,
             set_settings,
+            get_session,
+            set_session,
+            files::read_text_file,
+            files::write_text_file,
         ])
         .run(tauri::generate_context!())
         .expect("error starting PG Studio");

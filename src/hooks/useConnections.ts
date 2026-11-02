@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { Conn, TableInfo } from "../types";
 
-/** Saved connections, active connection and tables of the connected database. */
-export function useConnections() {
+/**
+ * Saved connections, active connection and tables of the connected database.
+ * `restoreId` is reconnected once at startup (silently skipped if it no longer exists or fails).
+ */
+export function useConnections(restoreId: number | null) {
   const [connections, setConnections] = useState<Conn[]>([]);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [tables, setTables] = useState<TableInfo[]>([]);
@@ -28,6 +31,13 @@ export function useConnections() {
       setConnecting(false);
     }
   }, []);
+
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current || restoreId === null) return;
+    restored.current = true;
+    connect(restoreId).catch((e) => console.error("Could not restore the last connection:", e));
+  }, [restoreId, connect]);
 
   const remove = useCallback(
     async (id: number) => {

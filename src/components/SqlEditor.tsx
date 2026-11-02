@@ -14,6 +14,7 @@ import type { TableInfo } from "../types";
 export interface SqlEditorHandle {
   /** The selection, or the whole text if nothing is selected. */
   getRunText: () => string;
+  focus: () => void;
 }
 
 interface Props {
@@ -57,7 +58,7 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
   const latest = useRef({ onChange, onRun, tables });
   latest.current = { onChange, onRun, tables };
 
-  useImperativeHandle(ref, () => ({ getRunText: () => getRunText(view.current!) }));
+  useImperativeHandle(ref, () => ({ getRunText: () => getRunText(view.current!), focus: () => view.current?.focus() }));
 
   useEffect(() => {
     const v = new EditorView({

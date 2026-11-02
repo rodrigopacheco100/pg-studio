@@ -14,7 +14,8 @@ Desktop PostgreSQL client. Tauri 2 (Rust) + React 19 + TypeScript + Vite + Tailw
 - `src-tauri/src/lib.rs`: `AppState` and Tauri commands (`#[tauri::command]`). Every new command goes into `generate_handler!` and gets a wrapper in `src/api.ts` (the only place that calls `invoke`).
 - `src-tauri/src/local.rs`: local SQLite (`pg-studio.sqlite`): saved connections, history, saved queries.
 - `src-tauri/src/pg.rs`: PostgreSQL access (connection, queries, tables).
-- `src-tauri/src/settings.rs`: program settings (see below).
+- `src-tauri/src/json_store.rs`: `JsonStore<T>`, a value persisted as JSON (atomic writes, defaults on a missing/corrupted file). `settings.rs` (program settings) and `session.rs` (work in progress) are built on it.
+- `src-tauri/src/files.rs`: `read_text_file` / `write_text_file` for SQL script files. Paths come from the native dialogs (`tauri-plugin-dialog`, wrapped in `files` in `src/api.ts`; permission `dialog:default` in `capabilities/default.json`).
 - `src/App.tsx`: layout (sidebar + Query/History/Saved tabs + status bar). `QueryView` stays mounted to preserve the editor.
 - `src/hooks/`: UI state (`useConnections`, `useResults`, `useSettings`). `src/components/`, `src/views/`, `src/lib/` (pure utilities, with tests). shadcn components in `src/components/ui/`.
 - `src/types.ts`: types shared with the backend (serde in camelCase where noted).
@@ -45,6 +46,18 @@ Values are integers (`u32` in Rust); round before saving.
 - `src/lib/statements.ts`: `splitStatements` splits a script on `;` outside strings, quoted identifiers, comments and `$tag$` blocks; `statementAtCursor` picks the statement under the cursor. Not handled: backslash escapes in `E'...'` strings.
 - `src/components/runGutter.ts`: a ▶ marker on the first line of each statement; clicking runs only that statement.
 - `SqlEditor` calls `onRun(sql)`: `Ctrl+Enter` passes the selection or whole text, `Ctrl+Shift+Enter` the statement at the cursor, the ▶ its own statement.
+
+## Editor documents
+
+`src/hooks/useDocuments.ts` owns the open SQL documents (`Doc`: id, path, name, sql, saved; dirty = `sql !== saved`). There is always at least one. `create` / `open` / `save(id, asNew?)` / `close` / `change` / `select`; opening a path that is already open focuses its tab, closing a dirty document asks for confirmation. `QueryView` renders the tab bar and one `SqlEditor` per document (hidden when inactive, so undo history and cursor survive tab switches) and registers the file shortcuts on `window` while visible. Using a history or saved query opens it in a new tab. The Saved tab (SQLite) is separate from `.sql` files. Closing the window does not warn about unsaved tabs, because they are restored on the next start (see below).
+
+## Session restore (`session.json`)
+
+`session.json` (next to `settings.json`) holds the work in progress: the open documents with their unsaved text (`Doc` fields) and the active tab, plus the active connection id. Settings are preferences; the session is state, so they are separate files with the same machinery.
+
+- Backend: `Session` in `session.rs`, commands `get_session` / `set_session`.
+- Frontend: `SessionProvider` / `useSession()` give `initial` (the session at startup, constant) and `update(patch)`. Each owner records its own part: `useDocuments` on every change of docs/active tab, `App` on connect/disconnect/delete. `useConnections(restoreId)` reconnects once at startup and ignores failures (the id is kept, so a down server does not forget the connection).
+- Persistence helpers: `usePersistedState` (load once, debounced save on change) is shared by settings and session; `lib/persist.ts` debounces and `flushOnClose()` (called in `main.tsx`) writes everything pending when the window closes (needs `core:window:allow-destroy`).
 
 ## Conventions
 

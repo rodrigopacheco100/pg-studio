@@ -68,3 +68,19 @@ export interface Settings {
   sidebarWidth: number;
   editorHeight: number;
 }
+
+/** Mirrors `SessionDoc` in src-tauri/src/session.rs. */
+export interface SessionDoc {
+  id: number;
+  path: string | null;
+  name: string;
+  sql: string;
+  saved: string;
+}
+
+/** Mirrors `Session` in src-tauri/src/session.rs. */
+export interface Session {
+  docs: SessionDoc[];
+  activeDoc: number | null;
+  connectionId: number | null;
+}
