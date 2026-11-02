@@ -2,6 +2,13 @@
 
 Newest first. Each release adds its section here (see `.github/workflows/release.yml`); the app bundles this file to show what changed after an update.
 
+## v1.1.0 - 2026-11-02
+
+- feat: more themes, editor syntax and environment colors from the theme, color editor (1e06d99)
+- feat: themes as JSON files, with Dark, Light, Dracula and Omni built in (553c7ba)
+- feat: themed select component instead of the native <select> (102fdb4)
+- ci: push the release over SSH with a deploy key and add CODEOWNERS (e3ddf5b)
+
 ## v1.0.0 - 2026-11-02
 
 - feat: update the app at startup and show what changed after an update (50db59a)
