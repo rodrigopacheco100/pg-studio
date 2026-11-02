@@ -1,6 +1,8 @@
+import { CompletionContext } from "@codemirror/autocomplete";
+import { EditorState } from "@codemirror/state";
 import { describe, expect, test } from "bun:test";
 import type { TableInfo } from "../types";
-import { makeAlias, parseRefs, statementAt } from "./sqlComplete";
+import { createSqlCompletion, makeAlias, parseRefs, SNIPPETS, statementAt } from "./sqlComplete";
 import { quoteIdent } from "./sql";
 
 const table = (schema: string, name: string): TableInfo => ({ schema, name, kind: "BASE TABLE", columns: [] });
@@ -42,4 +44,24 @@ test("quoteIdent quotes only when necessary", () => {
   expect(quoteIdent("name")).toBe("name");
   expect(quoteIdent("Class")).toBe('"Class"');
   expect(quoteIdent("user")).toBe('"user"');
+});
+
+describe("snippets", () => {
+  /** Labels offered with the cursor at the end of `doc`. */
+  const offered = async (doc: string) => {
+    const state = EditorState.create({ doc });
+    const result = await createSqlCompletion(() => tables)(new CompletionContext(state, doc.length, true));
+    return result?.options.map((o) => o.label) ?? [];
+  };
+
+  test("are offered at the start of a statement", async () => {
+    expect(await offered("se")).toContain("sel");
+    expect(await offered("select 1;\n  de")).toContain("del");
+  });
+  test("are not offered inside a statement", async () => {
+    expect(await offered("select * from student where se")).not.toContain("sel");
+  });
+  test("have unique labels", () => {
+    expect(new Set(SNIPPETS.map((s) => s.label)).size).toBe(SNIPPETS.length);
+  });
 });

@@ -163,9 +163,10 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
                 return true;
               },
             },
-            indentWithTab,
           ]),
         ),
+        // Below the default precedence of the snippet keymap, so Tab moves between snippet fields first.
+        keymap.of([indentWithTab]),
         runGutter((sql) => latest.current.onRun(sql)),
         basicSetup,
         sql({ dialect: PostgreSQL }),

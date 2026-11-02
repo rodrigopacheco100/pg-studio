@@ -1,4 +1,4 @@
-import type { Completion, CompletionContext, CompletionResult, CompletionSource } from "@codemirror/autocomplete";
+import { snippetCompletion, type Completion, type CompletionContext, type CompletionResult, type CompletionSource } from "@codemirror/autocomplete";
 import type { EditorView } from "@codemirror/view";
 import type { TableInfo } from "../types";
 import { quoteIdent, RESERVED } from "./sql";
@@ -7,6 +7,18 @@ const KEYWORDS = `SELECT FROM WHERE JOIN LEFT RIGHT INNER OUTER FULL CROSS ON US
   DISTINCT AS AND OR NOT IN IS NULL LIKE ILIKE BETWEEN EXISTS CASE WHEN THEN ELSE END INSERT INTO VALUES UPDATE SET
   DELETE RETURNING UNION ALL EXCEPT INTERSECT WITH CREATE ALTER DROP TABLE INDEX VIEW ASC DESC COUNT SUM AVG MIN MAX
   COALESCE CAST EXPLAIN ANALYZE TRUE FALSE`.split(/\s+/);
+
+/** Statement templates offered at the start of a statement; `${field}`s are filled in with Tab. */
+export const SNIPPETS: { label: string; detail: string; template: string }[] = [
+  { label: "sel", detail: "SELECT … FROM … WHERE", template: "SELECT ${columns}\nFROM ${table}\nWHERE ${condition};" },
+  { label: "cnt", detail: "SELECT count(*)", template: "SELECT count(*)\nFROM ${table}\nWHERE ${condition};" },
+  { label: "ins", detail: "INSERT INTO … VALUES", template: "INSERT INTO ${table} (${columns})\nVALUES (${values});" },
+  { label: "upd", detail: "UPDATE … SET … WHERE", template: "UPDATE ${table}\nSET ${column} = ${value}\nWHERE ${condition};" },
+  { label: "del", detail: "DELETE FROM … WHERE", template: "DELETE FROM ${table}\nWHERE ${condition};" },
+  { label: "crt", detail: "CREATE TABLE", template: "CREATE TABLE ${name} (\n  id serial PRIMARY KEY,\n  ${column} ${type}\n);" },
+  { label: "idx", detail: "CREATE INDEX", template: "CREATE INDEX ${name} ON ${table} (${column});" },
+  { label: "cte", detail: "WITH … AS (…) SELECT", template: "WITH ${name} AS (\n  ${query}\n)\nSELECT *\nFROM ${name};" },
+];
 
 export interface StatementRef {
   /** Alias declared in the query, if any. */
@@ -142,6 +154,9 @@ export function createSqlCompletion(getTables: () => TableInfo[]): CompletionSou
     }
 
     const options: Completion[] = KEYWORDS.map((k) => ({ label: k, type: "keyword" }));
+    if (doc.slice(stmt.from, word.from).trim() === "") {
+      options.push(...SNIPPETS.map((x) => snippetCompletion(x.template, { label: x.label, detail: x.detail, type: "text", boost: 2 })));
+    }
     if (refs.length === 0) {
       const seen = new Set<string>();
       for (const t of tables) {
