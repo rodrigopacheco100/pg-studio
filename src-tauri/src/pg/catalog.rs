@@ -53,7 +53,7 @@ fn quote_ident(s: &str) -> String {
     format!("\"{}\"", s.replace('"', "\"\""))
 }
 
-/// How the grid wants a table's rows: an optional sort and, per column, a text the cell must contain.
+/// How the grid wants a table's rows: an optional sort and the filters a row must all pass.
 #[derive(Deserialize, Default)]
 pub struct GridQuery {
     pub sort: Option<GridSort>,
@@ -66,25 +66,60 @@ pub struct GridSort {
     pub desc: bool,
 }
 
+/// `<column> <op> <value>`, the same filter `src/lib/gridFilter.ts` evaluates on a query's rows.
 #[derive(Deserialize)]
 pub struct GridFilter {
     pub column: String,
-    pub text: String,
+    pub op: String,
+    pub value: String,
+    /// Compare as numbers (the value is known to parse); otherwise as text.
+    pub numeric: bool,
+}
+
+/// `value` as the pattern of an `ILIKE`, with its wildcards taken literally.
+fn like_pattern(value: &str, before: &str, after: &str) -> String {
+    let escaped = value.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
+    quote_literal(&format!("{before}{escaped}{after}"))
+}
+
+impl GridFilter {
+    /// SQL condition. As in the grid, NULL passes only `IS NULL`; containing, starting and ending ignore case;
+    /// ordering compares text bytewise (`COLLATE "C"`), which is the order of ISO dates.
+    fn condition(&self) -> Result<String, String> {
+        let e = quote_ident(&self.column);
+        let v = quote_literal(&self.value);
+        let compare = |sql_op: &str| {
+            if self.numeric {
+                format!("({e})::numeric {sql_op} {v}::numeric")
+            } else if matches!(sql_op, "=" | "<>") {
+                format!("({e})::text {sql_op} {v}")
+            } else {
+                format!("({e})::text COLLATE \"C\" {sql_op} {v}")
+            }
+        };
+        Ok(match self.op.as_str() {
+            "is_null" => format!("{e} IS NULL"),
+            "not_null" => format!("{e} IS NOT NULL"),
+            "eq" => compare("="),
+            "ne" => compare("<>"),
+            "gt" => compare(">"),
+            "ge" => compare(">="),
+            "lt" => compare("<"),
+            "le" => compare("<="),
+            "contains" => format!("({e})::text ILIKE {}", like_pattern(&self.value, "%", "%")),
+            "not_contains" => format!("NOT (({e})::text ILIKE {})", like_pattern(&self.value, "%", "%")),
+            "starts" => format!("({e})::text ILIKE {}", like_pattern(&self.value, "", "%")),
+            "ends" => format!("({e})::text ILIKE {}", like_pattern(&self.value, "%", "")),
+            other => return Err(format!("unknown filter operator: {other}")),
+        })
+    }
 }
 
 impl GridQuery {
-    /// `WHERE` clause (with a leading space; empty without filters). A cell matches when its text contains
-    /// the filter, ignoring case; NULL counts as the text `NULL`, as in the grid.
-    fn where_clause(&self) -> String {
-        let conditions: Vec<String> = self
-            .filters
-            .iter()
-            .map(|f| {
-                let pattern = f.text.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
-                format!("COALESCE({}::text, 'NULL') ILIKE {}", quote_ident(&f.column), quote_literal(&format!("%{pattern}%")))
-            })
-            .collect();
-        if conditions.is_empty() { String::new() } else { format!(" WHERE {}", conditions.join(" AND ")) }
+    /// `WHERE` clause (with a leading space; empty without filters).
+    fn where_clause(&self) -> Result<String, String> {
+        let conditions = self.filters.iter().map(GridFilter::condition).collect::<Result<Vec<_>, _>>()?;
+        Ok(if conditions.is_empty() { String::new() } else { format!(" WHERE {}", conditions.join(" AND ")) })
     }
 
     /// `ORDER BY` clause (with a leading space; empty without sort). NULLs last in both directions.
@@ -108,7 +143,7 @@ pub async fn table_data(
         "SELECT * FROM {}.{}{}{} LIMIT {} OFFSET {}",
         quote_ident(schema),
         quote_ident(table),
-        view.where_clause(),
+        view.where_clause()?,
         view.order_clause(),
         limit,
         offset
@@ -118,7 +153,7 @@ pub async fn table_data(
 
 /// Rows of the table that match the filters of `view`, ignoring pagination.
 pub async fn table_count(client: &Client, schema: &str, table: &str, view: &GridQuery) -> Result<u64, String> {
-    let sql = format!("SELECT count(*) FROM {}.{}{}", quote_ident(schema), quote_ident(table), view.where_clause());
+    let sql = format!("SELECT count(*) FROM {}.{}{}", quote_ident(schema), quote_ident(table), view.where_clause()?);
     let res = run(client, &sql).await?.into_iter().next().unwrap_or_default();
     res.rows
         .into_iter()
@@ -318,29 +353,48 @@ pub async fn table_item(client: &Client, schema: &str, table: &str, kind: &str, 
 mod tests {
     use super::*;
 
-    fn filter(column: &str, text: &str) -> GridFilter {
-        GridFilter { column: column.into(), text: text.into() }
+    fn filter(column: &str, op: &str, value: &str, numeric: bool) -> GridFilter {
+        GridFilter { column: column.into(), op: op.into(), value: value.into(), numeric }
+    }
+
+    fn where_of(filters: Vec<GridFilter>) -> Result<String, String> {
+        GridQuery { sort: None, filters }.where_clause()
     }
 
     #[test]
     fn no_view_adds_nothing() {
         let v = GridQuery::default();
-        assert_eq!((v.where_clause(), v.order_clause()), (String::new(), String::new()));
+        assert_eq!((v.where_clause().unwrap(), v.order_clause()), (String::new(), String::new()));
     }
 
     #[test]
-    fn filters_match_text_ignoring_case_and_quote_everything() {
-        let v = GridQuery { sort: None, filters: vec![filter("Na\"me", "o'brien"), filter("id", "5")] };
-        assert_eq!(
-            v.where_clause(),
-            " WHERE COALESCE(\"Na\"\"me\"::text, 'NULL') ILIKE '%o''brien%' AND COALESCE(\"id\"::text, 'NULL') ILIKE '%5%'"
-        );
+    fn text_operators_ignore_case_and_quote_everything() {
+        let w = where_of(vec![filter("Na\"me", "contains", "o'brien", false), filter("id", "starts", "5", false)]).unwrap();
+        assert_eq!(w, " WHERE (\"Na\"\"me\")::text ILIKE '%o''brien%' AND (\"id\")::text ILIKE '5%'");
     }
 
     #[test]
-    fn like_wildcards_in_the_text_are_literal() {
-        let v = GridQuery { sort: None, filters: vec![filter("a", "50%_\\")] };
-        assert_eq!(v.where_clause(), " WHERE COALESCE(\"a\"::text, 'NULL') ILIKE '%50\\%\\_\\\\%'");
+    fn like_wildcards_in_the_value_are_literal() {
+        let w = where_of(vec![filter("a", "ends", "50%_\\", false)]).unwrap();
+        assert_eq!(w, " WHERE (\"a\")::text ILIKE '%50\\%\\_\\\\'");
+    }
+
+    #[test]
+    fn comparisons_are_numeric_or_bytewise_text() {
+        assert_eq!(where_of(vec![filter("n", "ge", "10", true)]).unwrap(), " WHERE (\"n\")::numeric >= '10'::numeric");
+        assert_eq!(where_of(vec![filter("d", "lt", "2024-01-01", false)]).unwrap(), " WHERE (\"d\")::text COLLATE \"C\" < '2024-01-01'");
+        assert_eq!(where_of(vec![filter("s", "eq", "x", false)]).unwrap(), " WHERE (\"s\")::text = 'x'");
+    }
+
+    #[test]
+    fn null_checks_need_no_value() {
+        let w = where_of(vec![filter("a", "is_null", "", false), filter("b", "not_null", "", false)]).unwrap();
+        assert_eq!(w, " WHERE \"a\" IS NULL AND \"b\" IS NOT NULL");
+    }
+
+    #[test]
+    fn unknown_operators_are_refused() {
+        assert!(where_of(vec![filter("a", "; drop table t", "1", false)]).is_err());
     }
 
     #[test]

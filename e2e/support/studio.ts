@@ -141,6 +141,26 @@ export class Studio {
     return this.page.locator("td[data-c]");
   }
 
+  /** Opens the results grid's filter bar (starting its first filter if there is none). */
+  async openFilters() {
+    await this.page.getByRole("button", { name: "Filter", exact: true }).click();
+    await expect(this.page.getByLabel("Filter column")).toBeVisible();
+  }
+
+  /** Fills the `row`-th filter of the grid (0-based) from its column, operator and value. Nothing is searched yet. */
+  async setFilter(row: number, f: { column?: string; op?: string; value?: string }) {
+    const group = this.page.getByRole("group", { name: `Filter ${row + 1}`, exact: true });
+    const field = (label: string) => group.getByLabel(label, { exact: true });
+    if (f.column) await this.choose(field("Filter column"), f.column);
+    if (f.op) await this.choose(field("Filter operator"), f.op);
+    if (f.value !== undefined) await field("Filter value").fill(f.value);
+  }
+
+  /** Applies the filters of the bar. */
+  async search() {
+    await this.page.getByRole("button", { name: "Search", exact: true }).click();
+  }
+
   /** The next "save as" dialog answers `path`, a path on the backend's filesystem (it writes the file). */
   async answerSaveDialog(path: string) {
     await this.page.evaluate((p) => ((window as unknown as { __E2E_SAVE_PATH: string }).__E2E_SAVE_PATH = p), path);

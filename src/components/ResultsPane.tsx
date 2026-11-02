@@ -27,7 +27,7 @@ export function ResultsPane({ results }: { results: ResultsApi }) {
     const path = await pickExportPath(`${table?.name ?? "result"}.${extension}`, extension);
     if (!path) return null;
     const all = table
-      ? await api.tableData(table.schema, table.name, ALL_ROWS, 0, toGridQuery(views[index] ?? NO_VIEW, shown.columns))
+      ? await api.tableData(table.schema, table.name, ALL_ROWS, 0, toGridQuery(views[index] ?? NO_VIEW, shown))
       : shown;
     await files.write(path, formatResult(format, all, table));
     return `${all.rows.length} row(s) exported as ${label}`;

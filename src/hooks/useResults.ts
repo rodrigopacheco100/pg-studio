@@ -22,8 +22,7 @@ export interface Paging {
   hasNext: boolean;
 }
 
-/** Wait after the last keystroke in a filter before asking the server for a table's rows. */
-const TABLE_VIEW_DELAY_MS = 250;
+type TableShape = Pick<QueryResult, "columns" | "types">;
 
 const tableKey = (t: TableRef) => `${t.schema}.${t.name}`;
 
@@ -39,17 +38,15 @@ export function useResults() {
   const [tableTotal, setTableTotal] = useState<number | null>(null);
   /** Sort and filters per result (by position). Queries apply them here, tables on the server. */
   const [views, setViews] = useState<GridView[]>([]);
-  const viewTimer = useRef<number>(undefined);
   const current = useRef(0);
   const countSeq = useRef(0);
   const countedTable = useRef<string | null>(null);
-  /** Columns of the table on screen, to name them when its view goes to the server. */
-  const tableColumns = useRef<string[]>([]);
+  /** Columns and types of the table on screen, to name them when its view goes to the server. */
+  const tableShape = useRef<TableShape>({ columns: [], types: [] });
 
   const runQuery = useCallback(async (sql: string) => {
     const id = ++current.current;
     const label = "Query";
-    window.clearTimeout(viewTimer.current);
     setViews([]);
     setSource({ kind: "query", page: 0 });
     setOutcome({ kind: "running" });
@@ -78,12 +75,12 @@ export function useResults() {
   }, []);
 
   /** Counts in the background: the page appears without waiting for the total. */
-  const countInBackground = useCallback((table: TableRef, view: GridView, columns: string[]) => {
+  const countInBackground = useCallback((table: TableRef, view: GridView, shape: TableShape) => {
     const seq = ++countSeq.current;
     countedTable.current = tableKey(table);
     setTableTotal(null);
     api
-      .tableCount(table.schema, table.name, toGridQuery(view, columns))
+      .tableCount(table.schema, table.name, toGridQuery(view, shape))
       .then((n) => seq === countSeq.current && setTableTotal(n))
       .catch(() => {}); // no total (e.g. no permission or cancelled): pagination goes on without the count
   }, []);
@@ -96,22 +93,21 @@ export function useResults() {
     async (table: TableRef, page = 0, view: GridView = NO_VIEW, quiet = false) => {
       const id = ++current.current;
       const label = `${tableKey(table)} · page ${page + 1}`;
-      window.clearTimeout(viewTimer.current);
-      setViews([view]);
+        setViews([view]);
       setSource({ kind: "table", table, page });
       if (!quiet) setOutcome({ kind: "running" });
       setInfo({ label, status: "running" });
       const started = performance.now();
       const elapsed = () => Math.round(performance.now() - started);
       try {
-        // The view names columns by position; a table opened fresh has no view, so the stale columns are not read.
-        const columns = tableColumns.current;
-        const query = toGridQuery(view, columns);
+        // The view names columns by position; a table opened fresh has no view, so the stale shape is not read.
+        const shape = tableShape.current;
+        const query = toGridQuery(view, shape);
         // Reopening the same table on page 0 recomputes the total; changing page reuses it.
-        if (page === 0 || countedTable.current !== tableKey(table)) countInBackground(table, view, columns);
+        if (page === 0 || countedTable.current !== tableKey(table)) countInBackground(table, view, shape);
         const data = await api.tableData(table.schema, table.name, pageSize, page * pageSize, query);
         if (id !== current.current) return;
-        tableColumns.current = data.columns;
+        tableShape.current = data;
         setOutcome({ kind: "ok", results: [data] });
         setInfo({ label, status: "ok", durationMs: elapsed(), rows: data.rows.length });
       } catch (e) {
@@ -136,13 +132,8 @@ export function useResults() {
   const setView = useCallback(
     (index: number, view: GridView) => {
       setViews((all) => Object.assign([], all, { [index]: view }));
-      if (source.kind === "table") {
-        window.clearTimeout(viewTimer.current);
-        viewTimer.current = window.setTimeout(
-          () => void openTable(source.table, 0, view, true),
-          TABLE_VIEW_DELAY_MS,
-        );
-      } else setSource({ kind: "query", page: 0 });
+      if (source.kind === "table") void openTable(source.table, 0, view, true);
+      else setSource({ kind: "query", page: 0 });
     },
     [source, openTable],
   );
@@ -157,7 +148,6 @@ export function useResults() {
   }, [pageSize, source, views, openTable]);
 
   const reset = useCallback(() => {
-    window.clearTimeout(viewTimer.current);
     setViews([]);
     current.current++;
     countSeq.current++;

@@ -4,12 +4,12 @@ import {
   ContextMenuSubTrigger, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
 import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { EXPORT_FORMATS, type ExportFormat } from "../lib/exportResult";
 import { useDialogs } from "../hooks/useDialogs";
 import { errText } from "../api";
-import { isActive, nextSort, NO_VIEW, withFilter, type GridView } from "../lib/gridView";
+import { isActive, nextSort, NO_VIEW, type GridView } from "../lib/gridView";
+import { FilterBar } from "./FilterBar";
 import { toCsv, toInsert, toJson, toTsv, type Row } from "../lib/rowFormat";
 import {
   cellRange, colRange, colsOf, contains, rowRange, rowsOf,
@@ -402,6 +402,7 @@ export function ResultViewer({ result, table, view, onViewChange, onExport }: Pr
           </button>
         )}
       </div>
+      {filtering && <FilterBar result={result} applied={view.filters} onSearch={(filters) => onViewChange({ ...view, filters })} />}
       <ContextMenu onOpenChange={(open) => !open && setMenu(null)}>
         <ContextMenuTrigger asChild>
           <table
@@ -440,16 +441,6 @@ export function ResultViewer({ result, table, view, onViewChange, onExport }: Pr
                           <SortIcon className="size-3" />
                         </button>
                       </div>
-                      {filtering && (
-                        <Input
-                          data-nodrag
-                          aria-label={`Filter ${c}`}
-                          placeholder="Filter"
-                          value={view.filters[i] ?? ""}
-                          onChange={(e) => onViewChange(withFilter(view, i, e.target.value))}
-                          className="mt-1 h-6 min-w-24 px-1.5 py-0 font-normal md:text-xs"
-                        />
-                      )}
                     </th>
                   );
                 })}
