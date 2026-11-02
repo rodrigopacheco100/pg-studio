@@ -34,6 +34,8 @@ Current settings:
 |---|---|---|
 | `sidebarWidth` | 256 (px) | Sidebar width; limits 180–560 in `Sidebar.tsx` |
 | `editorHeight` | 300 (px) | SQL editor height above the results; minimum 128, maximum 80% of the area (`QueryView.tsx`) |
+| `uiFont` | `roboto` | Interface font id, from `UI_FONTS` in `src/lib/fonts.ts` |
+| `editorFont` | `system-mono` | Editor/code font id, from `EDITOR_FONTS` in `src/lib/fonts.ts` |
 
 Values are integers (`u32` in Rust); round before saving.
 
@@ -65,6 +67,12 @@ Values are integers (`u32` in Rust); round before saving.
 `TableNode` (`src/components/TableNode.tsx`): the arrow at the left of each table expands folders Columns, Constraints, Foreign Keys, Indexes and Permissions (views only get Columns and Permissions). A folder's contents are fetched lazily the first time it is expanded through `table_details(schema, table, kind)` (`pg::table_details`, catalog queries returning `{ name, detail }` rows). To add a folder: a `kind` branch in `pg::table_details`, the `DetailKind` in `src/types.ts`, and an entry in `FOLDERS`. A new table list (refresh, reconnect) remounts the nodes, which drops their cached details.
 
 Double-clicking an item opens `ItemDetailsDialog`, which calls `table_item(schema, table, kind, name)`: `pg::table_item` builds one JSON document per kind in SQL (`json_build_object` over `pg_catalog`), typed in `src/types.ts` (`ColumnDetails`, `ConstraintDetails`, `ForeignKeyDetails`, `IndexDetails`, `PermissionDetails`, mapped by `ItemDetailsMap`). `src/components/itemScreens.tsx` has one screen per kind plus the shared blocks (`Properties`, `Section`, `Table`, `Code`). A new kind needs: the SQL branch, its type + `ItemDetailsMap` entry, and a screen.
+
+## Menu and preferences
+
+- `AppMenu` (`src/components/AppMenu.tsx`, radix menubar in `ui/menubar.tsx`) is the menu bar: File, Query, Connection, Settings. It only receives callbacks (`MenuActions`); `App` wires them to `useDocuments`, the connections hook and `QueryView`'s handle (`QueryViewHandle`: run, runAtCursor, format, saveQuery). Keyboard shortcuts are handled in `QueryView`; the menu only displays them, so keep both in sync.
+- `SettingsDialog` edits the settings through `useSettings().update`; changes apply and persist immediately.
+- Fonts: the font packages (`@fontsource-variable/*`) are imported in `index.css` and listed in `src/lib/fonts.ts` (`UI_FONTS`, `EDITOR_FONTS`: id, label, CSS family). `SettingsProvider` copies the chosen families into the CSS variables `--app-font-sans` / `--app-font-mono` on the root; Tailwind's `font-sans` / `font-mono` and the CodeMirror theme read those. To offer a new font: add the package import in `index.css` and an entry in `fonts.ts`. An unknown saved id falls back to the first option.
 
 ## Conventions
 

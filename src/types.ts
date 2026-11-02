@@ -67,6 +67,9 @@ export interface RunInfo {
 export interface Settings {
   sidebarWidth: number;
   editorHeight: number;
+  /** Font ids from `src/lib/fonts.ts`. */
+  uiFont: string;
+  editorFont: string;
 }
 
 /** Mirrors `SessionDoc` in src-tauri/src/session.rs. */
