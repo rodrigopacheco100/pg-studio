@@ -11,8 +11,28 @@ pub fn list_connections(state: State<AppState>) -> CmdResult<Vec<ConnectionConfi
     state.store(connections::list)
 }
 
+/// Fills the password and SSH secret `config` leaves blank with the ones stored for connection `from`, if it saves them.
+fn inherit_secrets(state: &AppState, config: &mut ConnectionConfig, from: i64) {
+    if !config.save_password {
+        return;
+    }
+    if let Ok(stored) = state.saved_connection(from) {
+        if config.password.is_empty() {
+            config.password = stored.password;
+        }
+        if config.ssh_secret.is_empty() {
+            config.ssh_secret = stored.ssh_secret;
+        }
+    }
+}
+
+/// `secrets_from` is the connection a new one is being duplicated from: its stored secrets are copied
+/// (the frontend never has them) unless the form has its own.
 #[tauri::command]
-pub fn save_connection(state: State<AppState>, config: ConnectionConfig) -> CmdResult<i64> {
+pub fn save_connection(state: State<AppState>, mut config: ConnectionConfig, secrets_from: Option<i64>) -> CmdResult<i64> {
+    if let (None, Some(from)) = (config.id, secrets_from) {
+        inherit_secrets(&state, &mut config, from);
+    }
     state.store(|db| connections::save(db, &state.secrets, &config))
 }
 
@@ -27,17 +47,10 @@ pub fn reorder_connections(state: State<AppState>, items: Vec<Placement>) -> Cmd
 }
 
 #[tauri::command]
-pub async fn test_connection(state: State<'_, AppState>, mut config: ConnectionConfig) -> CmdResult<()> {
-    // Editing a saved connection with secrets left blank: test with the stored ones.
-    if let (Some(id), true) = (config.id, config.save_password) {
-        if let Ok(stored) = state.saved_connection(id) {
-            if config.password.is_empty() {
-                config.password = stored.password;
-            }
-            if config.ssh_secret.is_empty() {
-                config.ssh_secret = stored.ssh_secret;
-            }
-        }
+pub async fn test_connection(state: State<'_, AppState>, mut config: ConnectionConfig, secrets_from: Option<i64>) -> CmdResult<()> {
+    // Editing a saved connection (or duplicating one) with secrets left blank: test with the stored ones.
+    if let Some(from) = config.id.or(secrets_from) {
+        inherit_secrets(&state, &mut config, from);
     }
     let (_tunnel, config) = state.route(&config).await?;
     pg::open(&config).await.map(drop)

@@ -5,6 +5,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppMenu } from "./components/AppMenu";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { ConnectionDialog } from "./components/ConnectionDialog";
+import { needsReconnect } from "./lib/connectionChange";
 import { Sidebar } from "./components/Sidebar";
 import { StatusBar } from "./components/StatusBar";
 import { errText } from "./api";
@@ -39,8 +40,8 @@ export function App() {
   const results = useResults();
   const [view, setView] = useState<View>("query");
   const documents = useDocuments();
-  /** `undefined` = closed, `null` = new connection, `Conn` = editing. */
-  const [dialog, setDialog] = useState<Conn | null | undefined>(undefined);
+  /** `undefined` = closed; `initial`: `null` = new connection, `Conn` = editing (or a copy, with `copyOf` its source). */
+  const [dialog, setDialog] = useState<{ initial: Conn | null; copyOf?: number } | undefined>(undefined);
 
   const [restored, setRestored] = useState(false);
   const updater = useUpdater();
@@ -99,31 +100,54 @@ export function App() {
     setView("query");
   }
 
+  /**
+   * Connects to `c`, first getting what it needs: the vault open when it keeps its password, otherwise the
+   * password (and SSH secret) typed. Resolves `false` if the user backed out. Throws if the connection fails.
+   */
+  async function connectTo(c: Conn): Promise<boolean> {
+    let password: string | undefined;
+    let sshSecret: string | undefined;
+    if (c.save_password) {
+      if (!(await ensureVault())) return false;
+    } else {
+      const typed = await dialogs.prompt(`Password for ${c.user}@${c.host}`, c.name, { secret: true });
+      if (typed === null) return false;
+      password = typed;
+      if (c.ssh_enabled && c.ssh_auth !== "agent") {
+        const what = c.ssh_auth === "password" ? "SSH password" : "SSH key passphrase (empty if none)";
+        const ssh = await dialogs.prompt(`${what} for ${c.ssh_user}@${c.ssh_host}`, c.name, { secret: true });
+        if (ssh === null) return false;
+        sshSecret = ssh;
+      }
+    }
+    await ws.connect(c.id!, password, sshSecret);
+    return true;
+  }
+
   async function toggle(c: Conn) {
     try {
       if (c.id === ws.activeId) await ws.disconnect();
-      else {
-        let password: string | undefined;
-        let sshSecret: string | undefined;
-        if (c.save_password) {
-          if (!(await ensureVault())) return;
-        } else {
-          const typed = await dialogs.prompt(`Password for ${c.user}@${c.host}`, c.name, { secret: true });
-          if (typed === null) return;
-          password = typed;
-          if (c.ssh_enabled && c.ssh_auth !== "agent") {
-            const what = c.ssh_auth === "password" ? "SSH password" : "SSH key passphrase (empty if none)";
-            const ssh = await dialogs.prompt(`${what} for ${c.ssh_user}@${c.ssh_host}`, c.name, { secret: true });
-            if (ssh === null) return;
-            sshSecret = ssh;
-          }
-        }
-        await ws.connect(c.id!, password, sshSecret);
-      }
+      else if (!(await connectTo(c))) return;
       session.update({ connectionId: ws.activeId === c.id ? null : c.id });
       resetWorkspace();
     } catch (e) {
       void dialogs.alert(`Failed to connect:\n${errText(e)}`);
+    }
+  }
+
+  /**
+   * After the form saved a connection. If it is the one that is open and what it depends on changed, connects
+   * again with the new settings (which starts a new database session, so the workspace is reset like on any connect).
+   */
+  async function saved(c: Conn) {
+    const before = dialog?.initial;
+    setDialog(undefined);
+    await ws.reload();
+    if (before?.id == null || c.id !== ws.activeId || !needsReconnect(before, c)) return;
+    try {
+      if (await connectTo(c)) resetWorkspace();
+    } catch (e) {
+      void dialogs.alert(`Failed to reconnect with the new settings:\n${errText(e)}`);
     }
   }
 
@@ -178,7 +202,7 @@ export function App() {
           runAtCursor={() => { setView("query"); queryView.current?.runAtCursor(); }}
           beautify={() => { setView("query"); queryView.current?.format(); }}
           saveQuery={() => void queryView.current?.saveQuery()}
-          newConnection={() => setDialog(null)}
+          newConnection={() => setDialog({ initial: null })}
           refreshTables={() => ws.refreshTables().catch((e) => dialogs.alert(errText(e)))}
           openSettings={() => setSettingsOpen(true)}
           checkForUpdates={() => void checkForUpdates()}
@@ -200,8 +224,9 @@ export function App() {
           onDeleteFolder={(f) => void deleteFolder(f)}
           activeId={ws.activeId}
           tables={ws.tables}
-          onNew={() => setDialog(null)}
-          onEdit={setDialog}
+          onNew={() => setDialog({ initial: null })}
+          onEdit={(c) => setDialog({ initial: c })}
+          onDuplicate={(c) => setDialog({ initial: { ...c, id: null, name: `${c.name} (copy)` }, copyOf: c.id! })}
           onDelete={remove}
           onToggle={toggle}
           onOpenTable={(t) => { setView("query"); void results.openTable(t); }}
@@ -242,9 +267,10 @@ export function App() {
         {updater.available && !notes && <UpdateDialog update={updater.available} onClose={updater.dismiss} />}
         {dialog !== undefined && (
           <ConnectionDialog
-            initial={dialog}
+            initial={dialog.initial}
+            copyOf={dialog.copyOf}
             onClose={() => setDialog(undefined)}
-            onSaved={() => { setDialog(undefined); void ws.reload(); }}
+            onSaved={(c) => void saved(c)}
           />
         )}
       </div>

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ChevronRight, Database, Folder, FolderOpen, FolderPlus, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
+import { ChevronRight, Copy, Database, Folder, FolderOpen, FolderPlus, Pencil, Plus, RefreshCw, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -22,6 +22,8 @@ interface Props {
   tables: TableInfo[];
   onNew: () => void;
   onEdit: (c: Conn) => void;
+  /** Opens the connection form filled with a copy of `c`. */
+  onDuplicate: (c: Conn) => void;
   onDelete: (c: Conn) => void;
   onToggle: (c: Conn) => void;
   onOpenTable: (t: TableRef) => void;
@@ -122,6 +124,9 @@ export function Sidebar(p: Props) {
         <Button variant="ghost" size="icon-xs" title="Edit" onClick={(e) => { e.stopPropagation(); p.onEdit(c); }}>
           <Pencil />
         </Button>
+        <Button variant="ghost" size="icon-xs" title="Duplicate" onClick={(e) => { e.stopPropagation(); p.onDuplicate(c); }}>
+          <Copy />
+        </Button>
         <Button variant="ghost" size="icon-xs" title="Delete" onClick={(e) => { e.stopPropagation(); p.onDelete(c); }}>
           <Trash2 />
         </Button>
@@ -132,6 +137,7 @@ export function Sidebar(p: Props) {
         <ContextMenuItem onSelect={() => p.onToggle(c)}>{c.id === p.activeId ? "Disconnect" : "Connect"}</ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem onSelect={() => p.onEdit(c)}>Edit…</ContextMenuItem>
+        <ContextMenuItem onSelect={() => p.onDuplicate(c)}>Duplicate…</ContextMenuItem>
         <ContextMenuItem variant="destructive" onSelect={() => p.onDelete(c)}>Delete</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

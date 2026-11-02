@@ -57,13 +57,16 @@ const toConn = (d: Draft): Conn => ({
 });
 
 interface Props {
-  /** Connection being edited; `null` creates a new one. */
+  /** Connection being edited (or the copy of one being created, see `copyOf`); `null` creates a new one. */
   initial: Conn | null;
+  /** Id of the connection `initial` was copied from: the copy inherits its stored password and SSH secret. */
+  copyOf?: number;
   onClose: () => void;
-  onSaved: () => void;
+  /** Called with the connection as saved (with its id), after it was stored. */
+  onSaved: (saved: Conn) => void;
 }
 
-export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
+export function ConnectionDialog({ initial, copyOf, onClose, onSaved }: Props) {
   const [draft, setDraft] = useState<Draft>(initial ? toDraft(initial) : EMPTY);
   const [url, setUrl] = useState("");
   const [msg, setMsg] = useState<{ text: string; kind: "" | "ok" | "error" }>({ text: "", kind: "" });
@@ -96,10 +99,10 @@ export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
 
   async function test() {
     // A blank password on a saved connection is tested with the stored one, which may need the vault open.
-    if (draft.save_password && initial?.id != null && (!draft.password || !draft.ssh_secret) && !(await ensureVault())) return;
+    if (draft.save_password && (initial?.id ?? copyOf) != null && (!draft.password || !draft.ssh_secret) && !(await ensureVault())) return;
     setMsg({ text: "Testing…", kind: "" });
     try {
-      await api.testConnection(toConn(draft));
+      await api.testConnection(toConn(draft), copyOf);
       setMsg({ text: "Connection OK", kind: "ok" });
     } catch (e) {
       setMsg({ text: errText(e), kind: "error" });
@@ -131,10 +134,11 @@ export function ConnectionDialog({ initial, onClose, onSaved }: Props) {
       setMsg({ text: `${missing[1]} is required`, kind: "error" });
       return;
     }
-    if (draft.save_password && (draft.password || draft.ssh_secret) && !(await ensureVault())) return;
+    if (draft.save_password && (draft.password || draft.ssh_secret || copyOf != null) && !(await ensureVault())) return;
     try {
-      await api.saveConnection(toConn(draft));
-      onSaved();
+      const conn = toConn(draft);
+      const id = await api.saveConnection(conn, copyOf);
+      onSaved({ ...conn, id });
     } catch (err) {
       setMsg({ text: errText(err), kind: "error" });
     }

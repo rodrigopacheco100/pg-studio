@@ -6,7 +6,8 @@ import type { Conn, DetailItem, Folder, KnownHost, DetailKind, ItemDetailsMap, E
 /** One typed wrapper per Tauri command defined in src-tauri/src/lib.rs. */
 export const api = {
   listConnections: () => invoke<Conn[]>("list_connections"),
-  saveConnection: (config: Conn) => invoke<number>("save_connection", { config }),
+  /** `secretsFrom`: the connection being duplicated, whose stored password and SSH secret the new one inherits. */
+  saveConnection: (config: Conn, secretsFrom?: number) => invoke<number>("save_connection", { config, secretsFrom }),
   deleteConnection: (id: number) => invoke<void>("delete_connection", { id }),
   reorderConnections: (items: { id: number; folder_id: number | null }[]) => invoke<void>("reorder_connections", { items }),
   listThemes: () => invoke<StoredTheme[]>("list_themes"),
@@ -22,7 +23,7 @@ export const api = {
   renameFolder: (id: number, name: string) => invoke<void>("rename_folder", { id, name }),
   deleteFolder: (id: number) => invoke<void>("delete_folder", { id }),
   reorderFolders: (ids: number[]) => invoke<void>("reorder_folders", { ids }),
-  testConnection: (config: Conn) => invoke<void>("test_connection", { config }),
+  testConnection: (config: Conn, secretsFrom?: number) => invoke<void>("test_connection", { config, secretsFrom }),
 
   connect: (id: number, password?: string, sshSecret?: string) => invoke<TableInfo[]>("connect", { id, password, sshSecret }),
   disconnect: () => invoke<void>("disconnect"),
