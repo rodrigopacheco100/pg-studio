@@ -157,3 +157,9 @@
     user-select: text;
   }
 }
+
+/* Our own show/hide button replaces the one WebView2 adds to password fields. */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
