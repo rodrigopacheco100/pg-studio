@@ -2,7 +2,7 @@
 //! encrypted with a key derived from a master password (Argon2id + ChaCha20-Poly1305). The derived key
 //! only lives in memory, after `create` / `unlock`.
 
-use crate::json_store::JsonStore;
+use crate::persist::JsonStore;
 use argon2::Argon2;
 use base64::{engine::general_purpose::STANDARD as B64, Engine};
 use chacha20poly1305::{aead::Aead, ChaCha20Poly1305, Key, KeyInit, Nonce};

@@ -11,11 +11,13 @@ Desktop PostgreSQL client. Tauri 2 (Rust) + React 19 + TypeScript + Vite + Tailw
 
 ## Architecture
 
-- `src-tauri/src/lib.rs`: `AppState` and Tauri commands (`#[tauri::command]`). Every new command goes into `generate_handler!` and gets a wrapper in `src/api.ts` (the only place that calls `invoke`).
-- `src-tauri/src/local.rs`: local SQLite (`pg-studio.sqlite`): saved connections, history, saved queries.
-- `src-tauri/src/pg.rs`: PostgreSQL access (connection, queries, tables).
-- `src-tauri/src/json_store.rs`: `JsonStore<T>`, a value persisted as JSON (atomic writes, defaults on a missing/corrupted file). `settings.rs` (program settings) and `session.rs` (work in progress) are built on it.
-- `src-tauri/src/files.rs`: `read_text_file` / `write_text_file` for SQL script files. Paths come from the native dialogs (`tauri-plugin-dialog`, wrapped in `files` in `src/api.ts`; permission `dialog:default` in `capabilities/default.json`).
+- `src-tauri/src/lib.rs`: only `run()` (plugins, state, `generate_handler!`). Every new command is registered there and gets a wrapper in `src/api.ts` (the only place that calls `invoke`).
+- `src-tauri/src/commands/`: the `#[tauri::command]`s, thin and grouped by subject: `connections`, `folders`, `vault`, `queries` (running SQL, browsing tables), `history` (history + saved queries), `preferences` (settings + session), `files` (`read_text_file` / `write_text_file` for SQL script files; paths come from the native dialogs, wrapped in `files` in `src/api.ts`, permission `dialog:default` in `capabilities/default.json`).
+- `src-tauri/src/state.rs`: `AppState` (stores, active connection, background row count) and the logic commands share: connect/disconnect, SSH routing, reopening a dropped connection, `CmdResult`. Mutex locks never cross an `.await`.
+- `src-tauri/src/storage/`: local SQLite (`pg-studio.sqlite`), one module per table: `connections`, `folders`, `history`, `saved_queries`. Each owns its schema (`init`, including upgrades of older databases) and exposes plain functions taking `&Connection`, used as `connections::list`, `history::add`…
+- `src-tauri/src/pg/`: PostgreSQL access: `connection` (open, cancel), `query` (run, typed results), `error` (error text), `catalog` (tables, details, items).
+- `src-tauri/src/persist/`: `JsonStore<T>`, a value persisted as JSON (atomic writes, defaults on a missing/corrupted file), with `settings` (program settings) and `session` (work in progress) built on it.
+- `src-tauri/src/secrets.rs`, `tunnel.rs`: password storage and the SSH tunnel (below).
 - `src/App.tsx`: layout (sidebar + Query/History/Saved tabs + status bar). `QueryView` stays mounted to preserve the editor.
 - `src/hooks/`: UI state (`useConnections`, `useResults`, `useSettings`). `src/components/`, `src/views/`, `src/lib/` (pure utilities, with tests). shadcn components in `src/components/ui/`.
 - `src/types.ts`: types shared with the backend (serde in camelCase where noted).
@@ -24,9 +26,9 @@ Desktop PostgreSQL client. Tauri 2 (Rust) + React 19 + TypeScript + Vite + Tailw
 
 `settings.json` lives in the app data directory (`app_data_dir`, next to the SQLite file). **Every** program setting goes through it; do not create another mechanism (localStorage, another file, etc.).
 
-- Backend: `Settings` + `SettingsStore` in `settings.rs`, held in `AppState.settings`. Commands `get_settings` / `set_settings` (replaces the whole object). Missing fields or a corrupted file fall back to the defaults (`#[serde(default)]`); writes are atomic (temporary file + rename).
+- Backend: `Settings` in `persist/settings.rs`, held in `AppState` as a `JsonStore<Settings>`. Commands `get_settings` / `set_settings` (replaces the whole object). Missing fields or a corrupted file fall back to the defaults (`#[serde(default)]`); writes are atomic (temporary file + rename).
 - Frontend: `SettingsProvider` (in `main.tsx`) loads once and exposes `useSettings()` → `{ settings, update(patch) }`. `update` applies immediately and persists with a 300 ms debounce. The app only renders after loading.
-- To add a setting: (1) field and default in `Settings`/`Default` (`settings.rs`); (2) field in `Settings` of `src/types.ts` (same name in camelCase); (3) use `useSettings()` where needed. Nothing else changes.
+- To add a setting: (1) field and default in `Settings`/`Default` (`persist/settings.rs`); (2) field in `Settings` of `src/types.ts` (same name in camelCase); (3) use `useSettings()` where needed. Nothing else changes.
 
 Current settings:
 
@@ -59,7 +61,7 @@ Values are integers (`u32` in Rust); round before saving.
 
 `session.json` (next to `settings.json`) holds the work in progress: the open documents with their unsaved text (`Doc` fields) and the active tab, plus the active connection id. Settings are preferences; the session is state, so they are separate files with the same machinery.
 
-- Backend: `Session` in `session.rs`, commands `get_session` / `set_session`.
+- Backend: `Session` in `persist/session.rs`, commands `get_session` / `set_session`.
 - Frontend: `SessionProvider` / `useSession()` give `initial` (the session at startup, constant) and `update(patch)`. Each owner records its own part: `useDocuments` on every change of docs/active tab, `App` on connect/disconnect/delete. `useConnections(restoreId)` reconnects once at startup and ignores failures (the id is kept, so a down server does not forget the connection).
 - Persistence helpers: `usePersistedState` (load once, debounced save on change) is shared by settings and session; `lib/persist.ts` debounces and `flushOnClose()` (called in `main.tsx`) writes everything pending when the window closes (needs `core:window:allow-destroy`).
 
@@ -71,17 +73,17 @@ Double-clicking an item opens `ItemDetailsDialog`, which calls `table_item(schem
 
 ## Connection folders and ordering
 
-Stored in `pg-studio.sqlite`: table `connection_folders` (id, name, position) and columns `folder_id`/`position` on `connections` (added by `local::open` on older databases; ties fall back to the name). Folders are flat. `Sidebar` uses native HTML5 drag and drop (hence `dragDropEnabled: false` on the window in `tauri.conf.json`): drop a connection on a folder (end of it), on a connection (before it, in its folder) or on the strip below the list (top level); drop a folder on a folder (before it) or on the strip (end). `lib/connectionOrder.ts` computes the new order (tested), `useConnections` applies it optimistically and persists the whole order via `reorder_connections` / `reorder_folders`. Deleting a folder moves its connections to the top level. While connected only the active connection is shown, without dragging. Collapsed folders are UI state only.
+Stored in `pg-studio.sqlite`: table `connection_folders` (id, name, position) and columns `folder_id`/`position` on `connections` (added by `storage::connections::init` on older databases; ties fall back to the name). Folders are flat. `Sidebar` uses native HTML5 drag and drop (hence `dragDropEnabled: false` on the window in `tauri.conf.json`): drop a connection on a folder (end of it), on a connection (before it, in its folder) or on the strip below the list (top level); drop a folder on a folder (before it) or on the strip (end). `lib/connectionOrder.ts` computes the new order (tested), `useConnections` applies it optimistically and persists the whole order via `reorder_connections` / `reorder_folders`. Deleting a folder moves its connections to the top level. While connected only the active connection is shown, without dragging. Collapsed folders are UI state only.
 
 ## Connection passwords
 
 Passwords are never kept in SQLite. `src-tauri/src/secrets.rs` (`Secrets`, in `AppState.secrets`) stores them in the OS credential store via the `keyring` crate (service `pg-studio`, user `connection-<id>`; the backend feature is chosen per target in `Cargo.toml`). Where there is none (probed once; e.g. WSL or Linux without a Secret Service) it uses `vault.json` instead: entries encrypted with ChaCha20-Poly1305 under a key derived from a master password (Argon2id). The key lives in memory only, after `vault_open(password, create)`; the frontend gets the state from `vault_status` and `useVault()` (`ensureVault()` asks for / creates the master password when needed; called before saving a password, testing with a stored one and connecting). A forgotten master password cannot be recovered.
 
-`list_connections` returns passwords blank; saving with a blank password keeps the stored one. `save_password` (checkbox in `ConnectionDialog`) decides whether to store at all: when off, the password is asked in a masked `dialogs.prompt(..., { secret: true })` at each connect and passed to `connect(id, password)`. Passwords left in SQLite by older versions are moved into the store at startup and after the vault is unlocked (`local::migrate_passwords`); until then they still work.
+`list_connections` returns passwords blank; saving with a blank password keeps the stored one. `save_password` (checkbox in `ConnectionDialog`) decides whether to store at all: when off, the password is asked in a masked `dialogs.prompt(..., { secret: true })` at each connect and passed to `connect(id, password)`. Passwords left in SQLite by older versions are moved into the store at startup and after the vault is unlocked (`storage::connections::migrate_passwords`); until then they still work.
 
 ## SSH tunnel
 
-A connection can reach the server through SSH (`ssh_*` fields of `ConnectionConfig`/`Conn`, columns in `connections`). `src-tauri/src/tunnel.rs` (russh) authenticates with a private key (optional passphrase), a password or the ssh-agent, then listens on `127.0.0.1:<random port>` and forwards each connection to the database `host:port` through the SSH server. `route()` in `lib.rs` opens the tunnel and returns the config `pg::open` should use (host/port pointing at the local end); `Active` keeps the `Tunnel` alive (dropping it closes everything), the tunneled `config` for `pg::open` / the background count, and the `origin` config so a dropped connection rebuilds the tunnel in `AppState::client`. The SSH password / passphrase is `ssh_secret`: handled exactly like `password` (secret store key `connection-<id>-ssh`, blank in lists, blank on save keeps it, asked at connect when `save_password` is off). Host keys use trust on first use (`known_hosts.json`): a changed key is refused until its entry is removed. The ssh-agent uses `SSH_AUTH_SOCK` on unix and the OpenSSH named pipe on Windows.
+A connection can reach the server through SSH (`ssh_*` fields of `ConnectionConfig`/`Conn`, columns in `connections`). `src-tauri/src/tunnel.rs` (russh) authenticates with a private key (optional passphrase), a password or the ssh-agent, then listens on `127.0.0.1:<random port>` and forwards each connection to the database `host:port` through the SSH server. `AppState::route` (`state.rs`) opens the tunnel and returns the config `pg::open` should use (host/port pointing at the local end); `Active` keeps the `Tunnel` alive (dropping it closes everything), the tunneled `config` for `pg::open` / the background count, and the `origin` config so a dropped connection rebuilds the tunnel in `AppState::client`. The SSH password / passphrase is `ssh_secret`: handled exactly like `password` (secret store key `connection-<id>-ssh`, blank in lists, blank on save keeps it, asked at connect when `save_password` is off). Host keys use trust on first use (`known_hosts.json`): a changed key is refused until its entry is removed. The ssh-agent uses `SSH_AUTH_SOCK` on unix and the OpenSSH named pipe on Windows.
 
 ## Menu and preferences
 

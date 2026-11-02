@@ -1,322 +1,14 @@
-mod files;
-mod json_store;
-mod local;
+mod commands;
 mod pg;
+mod persist;
 mod secrets;
-mod session;
-mod settings;
+mod state;
+mod storage;
 mod tunnel;
 
-use local::{ConnectionConfig, Folder, HistoryEntry, Placement, SavedQuery};
-use pg::{DetailItem, QueryResult, TableInfo};
-use secrets::Secrets;
-use session::{Session, SessionStore};
-use settings::{Settings, SettingsStore};
-use serde::Serialize;
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
-use tauri::{AppHandle, Emitter, Manager, State};
-use tokio::sync::Mutex as AsyncMutex;
-use tunnel::{KnownHosts, Tunnel};
-use tokio_postgres::Client;
-
-type CmdResult<T> = Result<T, String>;
-
-/// Active connection and the config used to open it (the background count opens its own).
-struct Active {
-    client: Arc<Client>,
-    /// What `pg::open` connects with: `origin`, with host and port pointing at the tunnel when there is one.
-    config: ConnectionConfig,
-    /// The connection as saved (plus the secrets typed for this session), to rebuild the tunnel on reconnect.
-    origin: ConnectionConfig,
-    /// Kept alive for as long as the connection is active.
-    tunnel: Option<Tunnel>,
-}
-
-/// Opens the SSH tunnel if the connection asks for one, and returns the config to connect with.
-async fn route(origin: &ConnectionConfig, hosts: &KnownHosts) -> CmdResult<(Option<Tunnel>, ConnectionConfig)> {
-    if !origin.ssh_enabled {
-        return Ok((None, origin.clone()));
-    }
-    let tunnel = tunnel::open(origin, hosts).await?;
-    let config = ConnectionConfig { host: "127.0.0.1".into(), port: tunnel.local_port, ..origin.clone() };
-    Ok((Some(tunnel), config))
-}
-
-struct AppState {
-    app: AppHandle,
-    store: Mutex<rusqlite::Connection>,
-    secrets: Secrets,
-    known_hosts: KnownHosts,
-    settings: Mutex<SettingsStore>,
-    session: Mutex<SessionStore>,
-    active: AsyncMutex<Option<Active>>,
-    /// Connection of the count in progress; separate from the main one so it never delays the user's queries.
-    counting: AsyncMutex<Option<Arc<pg::Session>>>,
-}
-
-impl AppState {
-    /// Runs `f` with the local SQLite. The lock never crosses an `.await`.
-    fn store<T, E: ToString>(&self, f: impl FnOnce(&rusqlite::Connection) -> Result<T, E>) -> CmdResult<T> {
-        let db = self.store.lock().map_err(|e| e.to_string())?;
-        f(&db).map_err(|e| e.to_string())
-    }
-
-    /// Main connection. If it was already detected as closed, reopens it before returning; nothing was
-    /// sent yet, so there is no risk of repeating a statement. A drop in the middle of a query
-    /// becomes an error, and the next command reconnects.
-    async fn client(&self) -> CmdResult<Arc<Client>> {
-        let mut guard = self.active.lock().await;
-        let active = guard.as_mut().ok_or_else(|| "Not connected".to_string())?;
-        if active.client.is_closed() {
-            // A dropped connection may mean a dropped tunnel too: build a new one.
-            active.tunnel = None;
-            let (tunnel, config) = route(&active.origin, &self.known_hosts).await?;
-            active.client = Arc::new(pg::open(&config).await?.client);
-            active.config = config;
-            active.tunnel = tunnel;
-            // The new session lost open transactions, SET, temporary tables, etc.
-            let _ = self.app.emit("connection-restored", ());
-        }
-        Ok(active.client.clone())
-    }
-
-    /// Interrupts, without waiting, the count in progress (if any).
-    async fn cancel_counting(&self) {
-        if let Some(session) = self.counting.lock().await.take() {
-            tauri::async_runtime::spawn(async move { session.cancel().await });
-        }
-    }
-}
-
-#[derive(Serialize)]
-struct QueryOutput {
-    results: Vec<QueryResult>,
-    duration_ms: u64,
-}
-
-#[tauri::command]
-fn list_connections(state: State<AppState>) -> CmdResult<Vec<ConnectionConfig>> {
-    state.store(local::list_connections)
-}
-
-#[tauri::command]
-fn save_connection(state: State<AppState>, config: ConnectionConfig) -> CmdResult<i64> {
-    state.store(|db| local::save_connection(db, &state.secrets, &config))
-}
-
-#[tauri::command]
-fn delete_connection(state: State<AppState>, id: i64) -> CmdResult<()> {
-    state.store(|db| local::delete_connection(db, &state.secrets, id))
-}
-
-#[tauri::command]
-async fn vault_status(state: State<'_, AppState>) -> CmdResult<secrets::Status> {
-    // The first call probes the keychain, which may block on the session bus.
-    let app = state.app.clone();
-    tauri::async_runtime::spawn_blocking(move || app.state::<AppState>().secrets.status())
-        .await
-        .map_err(|e| e.to_string())
-}
-
-/// Creates (first use) or unlocks the vault, then moves any password still left in SQLite into it.
-#[tauri::command]
-fn vault_open(state: State<AppState>, password: String, create: bool) -> CmdResult<()> {
-    if create { state.secrets.create(&password)? } else { state.secrets.unlock(&password)? }
-    state.store(|db| local::migrate_passwords(db, &state.secrets))
-}
-
-#[tauri::command]
-fn reorder_connections(state: State<AppState>, items: Vec<Placement>) -> CmdResult<()> {
-    state.store(|db| local::reorder_connections(db, &items))
-}
-
-#[tauri::command]
-fn list_folders(state: State<AppState>) -> CmdResult<Vec<Folder>> {
-    state.store(local::list_folders)
-}
-
-#[tauri::command]
-fn create_folder(state: State<AppState>, name: String) -> CmdResult<i64> {
-    state.store(|db| local::create_folder(db, &name))
-}
-
-#[tauri::command]
-fn rename_folder(state: State<AppState>, id: i64, name: String) -> CmdResult<()> {
-    state.store(|db| local::rename_folder(db, id, &name))
-}
-
-#[tauri::command]
-fn delete_folder(state: State<AppState>, id: i64) -> CmdResult<()> {
-    state.store(|db| local::delete_folder(db, id))
-}
-
-#[tauri::command]
-fn reorder_folders(state: State<AppState>, ids: Vec<i64>) -> CmdResult<()> {
-    state.store(|db| local::reorder_folders(db, &ids))
-}
-
-#[tauri::command]
-async fn test_connection(state: State<'_, AppState>, mut config: ConnectionConfig) -> CmdResult<()> {
-    // Editing a saved connection with the password left blank: test with the stored one.
-    if let (Some(id), true) = (config.id, config.save_password) {
-        if let Ok(stored) = state.store(|db| local::get_connection(db, &state.secrets, id)) {
-            if config.password.is_empty() {
-                config.password = stored.password;
-            }
-            if config.ssh_secret.is_empty() {
-                config.ssh_secret = stored.ssh_secret;
-            }
-        }
-    }
-    let (_tunnel, config) = route(&config, &state.known_hosts).await?;
-    pg::open(&config).await.map(drop)
-}
-
-#[tauri::command]
-async fn connect(
-    state: State<'_, AppState>,
-    id: i64,
-    password: Option<String>,
-    ssh_secret: Option<String>,
-) -> CmdResult<Vec<TableInfo>> {
-    let mut config = state.store(|db| local::get_connection(db, &state.secrets, id))?;
-    if let Some(password) = password {
-        config.password = password; // asked by the user for connections that do not save it
-    }
-    if let Some(secret) = ssh_secret {
-        config.ssh_secret = secret;
-    }
-    let (tunnel, routed) = route(&config, &state.known_hosts).await?;
-    let client = Arc::new(pg::open(&routed).await?.client);
-    let tables = pg::list_tables(&client).await?;
-    state.cancel_counting().await;
-    *state.active.lock().await = Some(Active { client, config: routed, origin: config, tunnel });
-    Ok(tables)
-}
-
-#[tauri::command]
-async fn disconnect(state: State<'_, AppState>) -> CmdResult<()> {
-    state.cancel_counting().await;
-    *state.active.lock().await = None;
-    Ok(())
-}
-
-#[tauri::command]
-async fn refresh_tables(state: State<'_, AppState>) -> CmdResult<Vec<TableInfo>> {
-    let client = state.client().await?;
-    pg::list_tables(&client).await
-}
-
-#[tauri::command]
-async fn run_query(state: State<'_, AppState>, sql: String, statements: Vec<String>) -> CmdResult<QueryOutput> {
-    let client = state.client().await?;
-    let start = Instant::now();
-    let outcome = pg::run_typed(&client, &sql, &statements).await;
-    let duration_ms = start.elapsed().as_millis() as u64;
-    // A failure to write the history must not hide the query result.
-    let _ = state.store(|db| {
-        local::add_history(db, &sql, duration_ms as i64, outcome.as_ref().err().map(String::as_str))
-    });
-    Ok(QueryOutput { results: outcome?, duration_ms })
-}
-
-#[tauri::command]
-async fn table_data(
-    state: State<'_, AppState>,
-    schema: String,
-    table: String,
-    limit: u32,
-    offset: u32,
-) -> CmdResult<QueryResult> {
-    let client = state.client().await?;
-    pg::table_data(&client, &schema, &table, limit, offset).await
-}
-
-#[tauri::command]
-async fn table_details(state: State<'_, AppState>, schema: String, table: String, kind: String) -> CmdResult<Vec<DetailItem>> {
-    let client = state.client().await?;
-    pg::table_details(&client, &schema, &table, &kind).await
-}
-
-#[tauri::command]
-async fn table_item(
-    state: State<'_, AppState>,
-    schema: String,
-    table: String,
-    kind: String,
-    name: String,
-) -> CmdResult<serde_json::Value> {
-    let client = state.client().await?;
-    pg::table_item(&client, &schema, &table, &kind, &name).await
-}
-
-#[tauri::command]
-async fn table_count(state: State<'_, AppState>, schema: String, table: String) -> CmdResult<u64> {
-    let config = {
-        let active = state.active.lock().await;
-        active.as_ref().map(|a| a.config.clone()).ok_or_else(|| "Not connected".to_string())?
-    };
-    // Own connection: the server handles one query at a time per connection, so counting on a
-    // shared connection would hold up the user's queries until count(*) finishes.
-    let session = Arc::new(pg::open(&config).await?);
-    if let Some(previous) = state.counting.lock().await.replace(session.clone()) {
-        tauri::async_runtime::spawn(async move { previous.cancel().await });
-    }
-
-    let total = pg::table_count(&session.client, &schema, &table).await;
-
-    let mut counting = state.counting.lock().await;
-    if counting.as_ref().is_some_and(|c| Arc::ptr_eq(c, &session)) {
-        *counting = None; // done: release the connection
-    }
-    total
-}
-
-#[tauri::command]
-fn get_settings(state: State<AppState>) -> CmdResult<Settings> {
-    Ok(state.settings.lock().map_err(|e| e.to_string())?.get())
-}
-
-#[tauri::command]
-fn set_settings(state: State<AppState>, settings: Settings) -> CmdResult<()> {
-    state.settings.lock().map_err(|e| e.to_string())?.set(settings)
-}
-
-#[tauri::command]
-fn get_session(state: State<AppState>) -> CmdResult<Session> {
-    Ok(state.session.lock().map_err(|e| e.to_string())?.get())
-}
-
-#[tauri::command]
-fn set_session(state: State<AppState>, session: Session) -> CmdResult<()> {
-    state.session.lock().map_err(|e| e.to_string())?.set(session)
-}
-
-#[tauri::command]
-fn list_history(state: State<AppState>) -> CmdResult<Vec<HistoryEntry>> {
-    state.store(local::list_history)
-}
-
-#[tauri::command]
-fn clear_history(state: State<AppState>) -> CmdResult<()> {
-    state.store(local::clear_history)
-}
-
-#[tauri::command]
-fn list_saved_queries(state: State<AppState>) -> CmdResult<Vec<SavedQuery>> {
-    state.store(local::list_saved)
-}
-
-#[tauri::command]
-fn save_query(state: State<AppState>, query: SavedQuery) -> CmdResult<()> {
-    state.store(|db| local::save_query(db, &query))
-}
-
-#[tauri::command]
-fn delete_saved_query(state: State<AppState>, id: i64) -> CmdResult<()> {
-    state.store(|db| local::delete_saved(db, id))
-}
+use commands::{connections, files, folders, history, preferences, queries, vault};
+use state::AppState;
+use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -325,43 +17,39 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
-            let store = local::open(&dir.join("pg-studio.sqlite"))?;
-            app.manage(AppState { app: app.handle().clone(), store: Mutex::new(store), secrets: Secrets::load(dir.join("vault.json")), known_hosts: KnownHosts::load(dir.join("known_hosts.json")), settings: Mutex::new(SettingsStore::load(dir.join("settings.json"))), session: Mutex::new(SessionStore::load(dir.join("session.json"))), active: AsyncMutex::new(None), counting: AsyncMutex::new(None) });
-            // Passwords left in SQLite by older versions move to the keychain (or stay until the vault is unlocked).
-            let state = app.state::<AppState>();
-            let _ = state.store(|db| local::migrate_passwords(db, &state.secrets));
+            app.manage(AppState::open(app.handle().clone(), &dir)?);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            list_connections,
-            save_connection,
-            delete_connection,
-            reorder_connections,
-            vault_status,
-            vault_open,
-            list_folders,
-            create_folder,
-            rename_folder,
-            delete_folder,
-            reorder_folders,
-            test_connection,
-            connect,
-            disconnect,
-            refresh_tables,
-            run_query,
-            table_data,
-            table_count,
-            table_details,
-            table_item,
-            list_history,
-            clear_history,
-            list_saved_queries,
-            save_query,
-            delete_saved_query,
-            get_settings,
-            set_settings,
-            get_session,
-            set_session,
+            connections::list_connections,
+            connections::save_connection,
+            connections::delete_connection,
+            connections::reorder_connections,
+            connections::test_connection,
+            connections::connect,
+            connections::disconnect,
+            folders::list_folders,
+            folders::create_folder,
+            folders::rename_folder,
+            folders::delete_folder,
+            folders::reorder_folders,
+            vault::vault_status,
+            vault::vault_open,
+            queries::refresh_tables,
+            queries::run_query,
+            queries::table_data,
+            queries::table_count,
+            queries::table_details,
+            queries::table_item,
+            history::list_history,
+            history::clear_history,
+            history::list_saved_queries,
+            history::save_query,
+            history::delete_saved_query,
+            preferences::get_settings,
+            preferences::set_settings,
+            preferences::get_session,
+            preferences::set_session,
             files::read_text_file,
             files::write_text_file,
         ])

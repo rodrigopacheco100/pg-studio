@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-type CmdResult<T> = Result<T, String>;
+use super::CmdResult;
 
 #[tauri::command]
 pub async fn read_text_file(path: PathBuf) -> CmdResult<String> {

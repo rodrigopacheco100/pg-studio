@@ -1,7 +1,6 @@
 //! Work in progress, persisted in `session.json` so the app reopens as it was left:
 //! the open editor documents (including unsaved text) and the active connection.
 
-use crate::json_store::JsonStore;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Clone, PartialEq)]
@@ -22,5 +21,3 @@ pub struct Session {
     pub active_doc: Option<u32>,
     pub connection_id: Option<i64>,
 }
-
-pub type SessionStore = JsonStore<Session>;

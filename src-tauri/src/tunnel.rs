@@ -1,8 +1,8 @@
 //! SSH tunnel to the PostgreSQL server: authenticates with russh and forwards a local port on
 //! 127.0.0.1 to the database host through the SSH server (like `ssh -L`).
 
-use crate::json_store::JsonStore;
-use crate::local::ConnectionConfig;
+use crate::persist::JsonStore;
+use crate::storage::connections::ConnectionConfig;
 use russh::client::{self, Handle};
 use russh::keys::{agent::client::AgentClient, ssh_key::HashAlg, PrivateKeyWithHashAlg, PublicKeyOrCertificate};
 use serde::{Deserialize, Serialize};
