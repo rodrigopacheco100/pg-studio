@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useSettings } from "../hooks/useSettings";
@@ -53,6 +54,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           onChange={(editorFont) => update({ editorFont })}
           sample="SELECT id, name FROM users WHERE id >= 10; -- 0123456789"
         />
+        <Label className="gap-2 font-normal">
+          <Checkbox checked={settings.confirmDestructive} onCheckedChange={(v) => update({ confirmDestructive: v === true })} />
+          Confirm before DROP, TRUNCATE, and DELETE / UPDATE without WHERE
+        </Label>
         <DialogFooter>
           <Button onClick={onClose}>Close</Button>
         </DialogFooter>

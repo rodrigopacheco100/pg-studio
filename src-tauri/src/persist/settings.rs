@@ -12,10 +12,12 @@ pub struct Settings {
     /// Font ids, resolved by the frontend (`src/lib/fonts.ts`).
     pub ui_font: String,
     pub editor_font: String,
+    /// Ask before running DROP, TRUNCATE, or DELETE / UPDATE without WHERE.
+    pub confirm_destructive: bool,
 }
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { sidebar_width: 256, editor_height: 300, ui_font: "roboto".into(), editor_font: "system-mono".into() }
+        Self { sidebar_width: 256, editor_height: 300, ui_font: "roboto".into(), editor_font: "system-mono".into(), confirm_destructive: true }
     }
 }

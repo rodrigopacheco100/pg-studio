@@ -97,6 +97,8 @@ export interface Settings {
   /** Font ids from `src/lib/fonts.ts`. */
   uiFont: string;
   editorFont: string;
+  /** Ask before running DROP, TRUNCATE, or DELETE / UPDATE without WHERE. */
+  confirmDestructive: boolean;
 }
 
 /** Mirrors `SessionDoc` in src-tauri/src/session.rs. */

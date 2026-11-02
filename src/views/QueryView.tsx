@@ -6,6 +6,7 @@ import { api } from "../api";
 import { ResizeHandle } from "../components/ResizeHandle";
 import { ResultsPane } from "../components/ResultsPane";
 import { SqlEditor, type SqlEditorHandle } from "../components/SqlEditor";
+import { destructiveStatements } from "../lib/destructive";
 import { useDialogs } from "../hooks/useDialogs";
 import { type DocumentsApi, isDirty } from "../hooks/useDocuments";
 import { useSettings } from "../hooks/useSettings";
@@ -36,8 +37,16 @@ export function QueryView({ ref, documents, tables, results, visible }: Props) {
   const { settings, update } = useSettings();
   const dialogs = useDialogs();
 
-  function run(text: string) {
-    if (text) void results.runQuery(text);
+  async function run(text: string) {
+    if (!text) return;
+    const risky = settings.confirmDestructive ? destructiveStatements(text) : [];
+    if (risky.length > 0) {
+      const shown = risky.slice(0, 5).map((d) => `• ${d.reason}: ${d.sql}`);
+      if (risky.length > shown.length) shown.push(`…and ${risky.length - shown.length} more`);
+      const ok = await dialogs.confirm(shown.join("\n"), { title: "Run destructive statements?", confirmLabel: "Run" });
+      if (!ok) return;
+    }
+    void results.runQuery(text);
   }
 
   async function saveQuery() {
