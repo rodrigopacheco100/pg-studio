@@ -23,9 +23,19 @@ jobs:
     outputs:
       tag: ${{ steps.version.outputs.tag }}
     steps:
+      # main only accepts direct pushes from the repository owner and from this deploy key (ruleset "Protect
+      # main"); the workflow's own GITHUB_TOKEN cannot bypass it on a personal repository. The version bump
+      # and the tag are pushed over SSH with RELEASE_DEPLOY_KEY, a write deploy key of this repository only.
+      - name: Check the release deploy key
+        env:
+          DEPLOY_KEY: ${{ secrets.RELEASE_DEPLOY_KEY }}
+        run: |
+          [ -n "$DEPLOY_KEY" ] || { echo "::error::Secret RELEASE_DEPLOY_KEY is not set (see the comment at the top of this job)"; exit 1; }
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ssh-key: ${{ secrets.RELEASE_DEPLOY_KEY }}
 
       - uses: dtolnay/rust-toolchain@stable
 
