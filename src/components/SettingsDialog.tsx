@@ -170,6 +170,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               hint="Connections that ask for a password are never reconnected automatically."
             />
             <Toggle label="Confirm before closing a tab with unsaved changes" setting="confirmCloseDirty" />
+            <Toggle
+              label="Check for updates when the app starts"
+              setting="checkForUpdates"
+              hint="You can always check from Help › Check for updates."
+            />
           </TabsContent>
 
           <TabsContent value="security" className={pane}>

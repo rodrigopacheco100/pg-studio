@@ -65,6 +65,18 @@ jobs:
           } > "$RUNNER_TEMP/notes.md"
           cat "$RUNNER_TEMP/notes.md"
 
+          # The app bundles CHANGELOG.md to show what changed after an update: add this release at the top.
+          export CHANGES="$(git log $range --no-merges --pretty='- %s (%h)' --invert-grep --grep='^chore(release)')"
+          export RELEASE_DATE="$(date -u +%F)"
+          node <<'JS'
+          const fs = require("fs");
+          const { TAG, CHANGES, RELEASE_DATE } = process.env;
+          const section = `## ${TAG} - ${RELEASE_DATE}\n\n${CHANGES || "- Maintenance release"}\n\n`;
+          const file = fs.readFileSync("CHANGELOG.md", "utf8");
+          const first = file.search(/^## v/m);
+          fs.writeFileSync("CHANGELOG.md", first === -1 ? file.trimEnd() + "\n\n" + section : file.slice(0, first) + section + file.slice(first));
+          JS
+
       - name: Commit, tag and create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -118,6 +130,9 @@ jobs:
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update packages; the matching public key is in tauri.conf.json (plugins.updater.pubkey).
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           tagName: ${{ needs.prepare.outputs.tag }}
           args: ${{ matrix.args }}

@@ -16,6 +16,13 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.icns", "icons/icon.ico"]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBEQkFCODk2QzY1Qjg4MkEKUldRcWlGdkdscmk2RFpxNzlqZWZjOW9DZzNMYzhya0RNNzNQdC81V3VtU0lEZUgwRjFqSUY2VVAK",
+      "endpoints": ["https://github.com/rodrigopacheco100/pg-studio/releases/latest/download/latest.json"]
+    }
   }
 }

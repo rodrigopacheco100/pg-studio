@@ -124,6 +124,8 @@ export interface Settings {
   vaultAutoLockMinutes: number;
   /** Ask before closing a tab with unsaved changes. */
   confirmCloseDirty: boolean;
+  /** Look for a new version when the app starts. */
+  checkForUpdates: boolean;
 }
 
 /** Mirrors `SessionDoc` in src-tauri/src/session.rs. */
@@ -140,6 +142,8 @@ export interface Session {
   docs: SessionDoc[];
   activeDoc: number | null;
   connectionId: number | null;
+  /** The last app version run here (see `APP_VERSION`), to show what changed after an update. */
+  seenVersion: string | null;
 }
 
 export type DetailKind = "columns" | "constraints" | "foreign_keys" | "indexes" | "permissions";

@@ -10,7 +10,12 @@ import { StatusBar } from "./components/StatusBar";
 import { errText } from "./api";
 import { environmentOf } from "./lib/environments";
 import { cn } from "@/lib/utils";
+import { UpdateDialog } from "./components/UpdateDialog";
+import { WhatsNewDialog } from "./components/WhatsNewDialog";
+import { useUpdater } from "./hooks/useUpdater";
 import { useVault } from "./hooks/useVault";
+import { releasesBetween, type Release } from "./lib/changelog";
+import { APP_VERSION, RELEASES } from "./lib/releases";
 import { useConnections } from "./hooks/useConnections";
 import { useSession } from "./hooks/useSession";
 import { useSettings } from "./hooks/useSettings";
@@ -37,6 +42,9 @@ export function App() {
   const [dialog, setDialog] = useState<Conn | null | undefined>(undefined);
 
   const [restored, setRestored] = useState(false);
+  const updater = useUpdater();
+  /** `null` = closed. `since` is the version the user had before (a post-update notice) or none (the full history). */
+  const [notes, setNotes] = useState<{ releases: Release[]; since: string | null } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const queryView = useRef<QueryViewHandle>(null);
 
@@ -56,6 +64,31 @@ export function App() {
       window.clearTimeout(timer);
     };
   }, []);
+
+  // After an update, show what changed since the version the user had before; record this version either way.
+  useEffect(() => {
+    const seen = session.initial.seenVersion;
+    if (seen !== APP_VERSION) {
+      const releases = seen === null ? [] : releasesBetween(RELEASES, seen, APP_VERSION);
+      if (releases.length > 0) setNotes({ releases, since: seen });
+      session.update({ seenVersion: APP_VERSION });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, at startup
+  }, []);
+
+  // Look for a new version once at startup. Failing (offline, no release yet) is not worth bothering the user.
+  useEffect(() => {
+    if (settings.checkForUpdates) updater.lookUp().catch((e) => console.error("Update check failed:", e));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, at startup
+  }, []);
+
+  async function checkForUpdates() {
+    try {
+      if ((await updater.lookUp()) === "current") await dialogs.alert(`You're up to date (v${APP_VERSION}).`, "Check for updates");
+    } catch (e) {
+      await dialogs.alert(`Could not check for updates:\n${errText(e)}`, "Check for updates");
+    }
+  }
 
   const active = ws.connections.find((c) => c.id === ws.activeId);
   const environment = environmentOf(active);
@@ -147,6 +180,8 @@ export function App() {
           newConnection={() => setDialog(null)}
           refreshTables={() => ws.refreshTables().catch((e) => dialogs.alert(errText(e)))}
           openSettings={() => setSettingsOpen(true)}
+          checkForUpdates={() => void checkForUpdates()}
+          showReleaseHistory={() => setNotes({ releases: RELEASES, since: null })}
           connected={ws.activeId !== null}
         />
         {environment && active && (
@@ -194,6 +229,15 @@ export function App() {
         <StatusBar connection={active} info={results.info} paging={results.paging} onPage={results.goToPage} restored={restored} />
 
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+        {notes && (
+          <WhatsNewDialog
+            title={notes.since ? "PG Studio was updated" : "Release history"}
+            description={notes.since ? `What changed since v${notes.since}` : `You have v${APP_VERSION}`}
+            releases={notes.releases}
+            onClose={() => setNotes(null)}
+          />
+        )}
+        {updater.available && !notes && <UpdateDialog update={updater.available} onClose={updater.dismiss} />}
         {dialog !== undefined && (
           <ConnectionDialog
             initial={dialog}

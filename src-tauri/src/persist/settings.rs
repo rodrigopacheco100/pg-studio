@@ -33,6 +33,8 @@ pub struct Settings {
     pub vault_auto_lock_minutes: u32,
     /// Ask before closing a tab with unsaved changes.
     pub confirm_close_dirty: bool,
+    /// Look for a new version when the app starts.
+    pub check_for_updates: bool,
 }
 
 impl Default for Settings {
@@ -54,6 +56,7 @@ impl Default for Settings {
             restore_connection: true,
             vault_auto_lock_minutes: 0,
             confirm_close_dirty: true,
+            check_for_updates: true,
         }
     }
 }

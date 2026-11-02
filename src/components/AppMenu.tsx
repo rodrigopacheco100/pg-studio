@@ -14,6 +14,8 @@ export interface MenuActions {
   newConnection: () => void;
   refreshTables: () => void;
   openSettings: () => void;
+  checkForUpdates: () => void;
+  showReleaseHistory: () => void;
   /** Whether a connection is active (needed to refresh its tables). */
   connected: boolean;
 }
@@ -63,6 +65,13 @@ export function AppMenu(a: MenuActions) {
         <MenubarTrigger>Settings</MenubarTrigger>
         <MenubarContent>
           <Item label="Preferences…" onSelect={a.openSettings} />
+        </MenubarContent>
+      </MenubarMenu>
+      <MenubarMenu>
+        <MenubarTrigger>Help</MenubarTrigger>
+        <MenubarContent>
+          <Item label="What's new…" onSelect={a.showReleaseHistory} />
+          <Item label="Check for updates…" onSelect={a.checkForUpdates} />
         </MenubarContent>
       </MenubarMenu>
     </Menubar>

@@ -20,4 +20,6 @@ pub struct Session {
     pub docs: Vec<SessionDoc>,
     pub active_doc: Option<u32>,
     pub connection_id: Option<i64>,
+    /// The last app version that was run here, to show what changed after an update.
+    pub seen_version: Option<String>,
 }

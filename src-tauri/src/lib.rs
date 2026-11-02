@@ -72,7 +72,12 @@ pub fn configure<R: Runtime>(builder: Builder<R>, data_dir: Option<PathBuf>) -> 
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    configure(Builder::default().plugin(tauri_plugin_dialog::init()), None)
+    let builder = Builder::default().plugin(tauri_plugin_dialog::init());
+    #[cfg(desktop)]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+    configure(builder, None)
         .run(tauri::generate_context!())
         .expect("error starting PG Studio");
 }

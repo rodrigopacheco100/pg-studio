@@ -6,7 +6,7 @@ Desktop PostgreSQL client. Tauri 2 (Rust) + React 19 + TypeScript + Vite + Tailw
 
 - `bun run dev` / `bun run tauri dev`: frontend / full app
 - `bun run build`: `tsc --noEmit` + `vite build` (use `npx tsc --noEmit` as a quick check)
-- `bun test`: tests in `src/lib/*.test.ts`
+- `bun run test`: tests in `src/lib/*.test.ts` (plain `bun test` would also pick up the Playwright specs in `e2e/`)
 - `cargo check` in `src-tauri/`: backend check
 
 ## Architecture
@@ -49,6 +49,7 @@ Current settings:
 | `restoreConnection` | `true` | Reconnect to the session's last connection at startup (`App`) |
 | `vaultAutoLockMinutes` | 0 | Lock the master-password vault after this idle time (`AppState::watch_vault_idle`); 0 = never |
 | `confirmCloseDirty` | `true` | Ask before closing a tab with unsaved changes (`useDocuments`) |
+| `checkForUpdates` | `true` | Look for a new version when the app starts (`App`) |
 
 `SettingsDialog` groups them in tabs (Appearance, Editor, Query, General, Security — the last also lists the known SSH servers); `Field` (dropdown with presets) and `Toggle` bind one setting each, so a new setting is one more line there.
 
@@ -105,9 +106,15 @@ The webview's native menu is blocked globally (`main.tsx`); every place that nee
 
 ## Menu and preferences
 
-- `AppMenu` (`src/components/AppMenu.tsx`, radix menubar in `ui/menubar.tsx`) is the menu bar: File, Query, Connection, Settings. It only receives callbacks (`MenuActions`); `App` wires them to `useDocuments`, the connections hook and `QueryView`'s handle (`QueryViewHandle`: run, runAtCursor, format, saveQuery). Keyboard shortcuts are handled in `QueryView`; the menu only displays them, so keep both in sync.
+- `AppMenu` (`src/components/AppMenu.tsx`, radix menubar in `ui/menubar.tsx`) is the menu bar: File, Query, Connection, Settings, Help. It only receives callbacks (`MenuActions`); `App` wires them to `useDocuments`, the connections hook and `QueryView`'s handle (`QueryViewHandle`: run, runAtCursor, format, saveQuery). Keyboard shortcuts are handled in `QueryView`; the menu only displays them, so keep both in sync.
 - `SettingsDialog` edits the settings through `useSettings().update`; changes apply and persist immediately.
 - Fonts: the font packages (`@fontsource-variable/*`) are imported in `index.css` and listed in `src/lib/fonts.ts` (`UI_FONTS`, `EDITOR_FONTS`: id, label, CSS family). `SettingsProvider` copies the chosen families into the CSS variables `--app-font-sans` / `--app-font-mono` on the root; Tailwind's `font-sans` / `font-mono` and the CodeMirror theme read those. To offer a new font: add the package import in `index.css` and an entry in `fonts.ts`. An unknown saved id falls back to the first option.
+
+## Updates and release notes
+
+- **Updater:** `tauri-plugin-updater` + `tauri-plugin-process` (registered in `run()`, permissions in `capabilities/default.json`). `plugins.updater` in `tauri.conf.json` has the public key and the endpoint (`releases/latest/download/latest.json` on GitHub); `bundle.createUpdaterArtifacts` makes the build produce signed update packages. `App` checks once at startup (unless `checkForUpdates` is off; failures are ignored) and Help › Check for updates… checks on demand (`useUpdater`). A found update opens `UpdateDialog` (its notes, Install and restart / Later).
+- **Signing key:** the private key is NOT in the repo. It lives at `~/.tauri/pg-studio.key` on the maintainer's machine and in the GitHub secrets `TAURI_SIGNING_PRIVATE_KEY` (+ `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, empty for the current key), which `release.yml` passes to `tauri-action`. Losing it, or changing the public key, means installed copies can no longer update.
+- **What changed:** `CHANGELOG.md` (repo root) has one `## v<version> - <date>` section per release with `- ` bullets; the release workflow prepends the new section and commits it with the version bump. The app bundles the file (`src/lib/releases.ts`, parsed by `lib/changelog.ts`). On startup `App` compares `Session.seenVersion` (what the user last ran) with `APP_VERSION` (injected by Vite from `package.json`) and, if the app was updated, opens `WhatsNewDialog` with the releases in between; a first run (no `seenVersion`) shows nothing. Help › What's new… shows the whole history. Keep the section format, the parser depends on it.
 
 ## End-to-end tests (`e2e/`)
 

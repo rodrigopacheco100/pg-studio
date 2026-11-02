@@ -146,9 +146,14 @@ export class Studio {
     await this.page.keyboard.press("Escape");
   }
 
+  /** Picks `item` from the menu bar's `menu`. */
+  async chooseMenu(menu: string, item: string) {
+    await this.page.getByRole("menuitem", { name: menu, exact: true }).click();
+    await this.page.getByRole("menuitem", { name: item }).click();
+  }
+
   async openSettings(tab?: string) {
-    await this.page.getByRole("menuitem", { name: "Settings" }).click();
-    await this.page.getByRole("menuitem", { name: "Preferences…" }).click();
+    await this.chooseMenu("Settings", "Preferences…");
     const dialog = this.dialog("Settings");
     if (tab) await dialog.getByRole("tab", { name: tab }).click();
     return dialog;
