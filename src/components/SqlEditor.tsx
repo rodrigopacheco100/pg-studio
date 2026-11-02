@@ -6,6 +6,7 @@ import { oneDark } from "@codemirror/theme-one-dark";
 import { EditorView, keymap } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useImperativeHandle, useRef } from "react";
+import { statementAtCursor } from "../lib/statements";
 import { runGutter } from "./runGutter";
 import { createSqlCompletion } from "../lib/sqlComplete";
 import type { TableInfo } from "../types";
@@ -66,6 +67,14 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
         Prec.highest(
           keymap.of([
             { key: "Mod-Enter", run: (target) => (latest.current.onRun(getRunText(target)), true) },
+            {
+              key: "Mod-Shift-Enter",
+              run: (target) => {
+                const { doc, selection } = target.state;
+                latest.current.onRun(statementAtCursor(doc.toString(), selection.main.head));
+                return true;
+              },
+            },
             indentWithTab,
           ]),
         ),
