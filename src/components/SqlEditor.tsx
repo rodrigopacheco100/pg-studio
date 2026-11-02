@@ -8,6 +8,7 @@ import { basicSetup } from "codemirror";
 import { useEffect, useImperativeHandle, useRef } from "react";
 import { formatSql } from "../lib/formatSql";
 import { statementAtCursor } from "../lib/statements";
+import { useDialogs } from "../hooks/useDialogs";
 import { runGutter } from "./runGutter";
 import { errText } from "../api";
 import { createSqlCompletion } from "../lib/sqlComplete";
@@ -55,7 +56,7 @@ function getRunText(v: EditorView) {
   return (from === to ? s.doc.toString() : s.sliceDoc(from, to)).trim();
 }
 
-function formatDocument(v: EditorView) {
+function formatDocument(v: EditorView, onError: (message: string) => void) {
   const text = v.state.doc.toString();
   try {
     const formatted = formatSql(text);
@@ -65,11 +66,12 @@ function formatDocument(v: EditorView) {
       selection: { anchor: Math.min(v.state.selection.main.head, formatted.length) },
     });
   } catch (e) {
-    alert(`Could not format the SQL:\n${errText(e)}`);
+    onError(`Could not format the SQL:\n${errText(e)}`);
   }
 }
 
 export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
+  const dialogs = useDialogs();
   const host = useRef<HTMLDivElement>(null);
   const view = useRef<EditorView | null>(null);
   // Callbacks and tables change without recreating the editor.
@@ -77,7 +79,7 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
   latest.current = { onChange, onRun, tables };
 
   useImperativeHandle(ref, () => ({ getRunText: () => getRunText(view.current!), focus: () => view.current?.focus(),
-    format: () => formatDocument(view.current!),
+    format: () => formatDocument(view.current!, (m) => void dialogs.alert(m)),
   }));
 
   useEffect(() => {

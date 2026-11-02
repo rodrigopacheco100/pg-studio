@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { errText, files } from "../api";
+import { useDialogs } from "./useDialogs";
 import { useSession } from "./useSession";
 
 export interface Doc {
@@ -19,6 +20,7 @@ const baseName = (path: string) => path.split(/[\\/]/).pop() ?? path;
 /** The SQL documents open in the editor (files and unsaved scratch tabs). There is always at least one. */
 export function useDocuments() {
   const session = useSession();
+  const dialogs = useDialogs();
   const restored = session.initial.docs;
   const nextId = useRef(Math.max(0, ...restored.map((d) => d.id)) + 1);
   const untitled = useRef(Math.max(0, ...restored.map((d) => Number(/^Untitled-(\d+)$/.exec(d.name)?.[1] ?? 0))));
@@ -58,9 +60,9 @@ export function useDocuments() {
         setActiveId(doc.id);
       }
     } catch (e) {
-      alert(`Failed to open file:\n${errText(e)}`);
+      void dialogs.alert(`Failed to open file:\n${errText(e)}`);
     }
-  }, []);
+  }, [dialogs]);
 
   const save = useCallback(async (id: number, asNew = false) => {
     const doc = latest.current.find((d) => d.id === id);
@@ -72,13 +74,14 @@ export function useDocuments() {
       await files.write(path, content);
       patch(id, { path, name: baseName(path), saved: content });
     } catch (e) {
-      alert(`Failed to save file:\n${errText(e)}`);
+      void dialogs.alert(`Failed to save file:\n${errText(e)}`);
     }
-  }, [patch]);
+  }, [patch, dialogs]);
 
-  const close = useCallback((id: number) => {
+  const close = useCallback(async (id: number) => {
     const doc = latest.current.find((d) => d.id === id);
-    if (!doc || (isDirty(doc) && !confirm(`Discard unsaved changes to ${doc.name}?`))) return;
+    if (!doc) return;
+    if (isDirty(doc) && !(await dialogs.confirm(`Discard unsaved changes to ${doc.name}?`, { title: "Unsaved changes", confirmLabel: "Discard" }))) return;
     const rest = latest.current.filter((d) => d.id !== id);
     if (rest.length === 0) {
       const fresh = blank();
@@ -93,7 +96,7 @@ export function useDocuments() {
       return rest[Math.min(index, rest.length - 1)].id;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `blank` only touches refs
-  }, []);
+  }, [dialogs]);
 
   useEffect(() => {
     session.update({ docs, activeDoc: activeId });

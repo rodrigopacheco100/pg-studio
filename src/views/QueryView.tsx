@@ -6,6 +6,7 @@ import { api } from "../api";
 import { ResizeHandle } from "../components/ResizeHandle";
 import { ResultsPane } from "../components/ResultsPane";
 import { SqlEditor, type SqlEditorHandle } from "../components/SqlEditor";
+import { useDialogs } from "../hooks/useDialogs";
 import { type DocumentsApi, isDirty } from "../hooks/useDocuments";
 import { useSettings } from "../hooks/useSettings";
 import type { ResultsApi } from "../hooks/useResults";
@@ -24,6 +25,7 @@ export function QueryView({ documents, tables, results, visible }: Props) {
   const { docs, active, select, create, change, open, save, close } = documents;
   const editors = useRef(new Map<number, SqlEditorHandle>());
   const { settings, update } = useSettings();
+  const dialogs = useDialogs();
 
   function run(text: string) {
     if (text) void results.runQuery(text);
@@ -31,7 +33,7 @@ export function QueryView({ documents, tables, results, visible }: Props) {
 
   async function saveQuery() {
     if (!active.sql.trim()) return;
-    const name = prompt("Query name:");
+    const name = await dialogs.prompt("Query name:", "Save query");
     if (name) await api.saveQuery({ id: null, name, sql: active.sql });
   }
 

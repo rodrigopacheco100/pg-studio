@@ -68,6 +68,7 @@ Double-clicking an item opens `ItemDetailsDialog`, which calls `table_item(schem
 
 ## Conventions
 
+- Never call `window.confirm/alert/prompt`: the webview places them at arbitrary spots. Use `useDialogs()` (`confirm`, `alert`, `prompt`; all async, in `src/hooks/useDialogs.tsx`).
 - Backend errors are `String` (`CmdResult<T>`); on the frontend use `errText`.
 - `Mutex` locks never cross an `.await`.
 - Keep changes minimal and in the right owner of the responsibility; no speculative abstractions.
