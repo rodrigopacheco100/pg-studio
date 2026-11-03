@@ -52,7 +52,7 @@ interface Props {
   /** Starts exporting every row of the result (not just the page); the progress shows in its own window. */
   onExport?: (format: ExportFormat) => Promise<void>;
   /** Opens a query in a new editor tab (the "Open in new tab" of a foreign key's dialog); without it the dialog lacks that button. */
-  onOpenSql?: (sql: string) => void;
+  onOpenSql?: (name: string, sql: string) => void;
 }
 
 /** Reads the position (row/column) of a grid element; undefined outside it. */

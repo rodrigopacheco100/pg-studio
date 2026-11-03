@@ -26,7 +26,8 @@ export function useDocuments() {
   const restored = session.initial.docs;
   const nextId = useRef(Math.max(0, ...restored.map((d) => d.id)) + 1);
   const untitled = useRef(Math.max(0, ...restored.map((d) => Number(/^Untitled-(\d+)$/.exec(d.name)?.[1] ?? 0))));
-  const blank = (sql = ""): Doc => ({ id: nextId.current++, path: null, name: `Untitled-${++untitled.current}`, sql, saved: "" });
+  /** A new unsaved document; without a `name` it is numbered Untitled-N. */
+  const blank = (sql = "", name?: string): Doc => ({ id: nextId.current++, path: null, name: name ?? `Untitled-${++untitled.current}`, sql, saved: "" });
 
   const [docs, setDocs] = useState<Doc[]>(() => (restored.length > 0 ? restored : [blank()]));
   const [activeId, setActiveId] = useState(() => session.initial.activeDoc ?? docs[0].id);
@@ -38,8 +39,8 @@ export function useDocuments() {
     setDocs((all) => all.map((d) => (d.id === id ? { ...d, ...changes } : d)));
   }, []);
 
-  const create = useCallback((sql = "") => {
-    const doc = blank(sql);
+  const create = useCallback((sql = "", name?: string) => {
+    const doc = blank(sql, name);
     setDocs((all) => [...all, doc]);
     setActiveId(doc.id);
     return doc.id;
@@ -47,6 +48,8 @@ export function useDocuments() {
   }, []);
 
   const change = useCallback((id: number, sql: string) => patch(id, { sql }), [patch]);
+  /** Names a document that has no file yet. */
+  const rename = useCallback((id: number, name: string) => patch(id, { name }), [patch]);
 
   const open = useCallback(async () => {
     try {
@@ -107,7 +110,7 @@ export function useDocuments() {
   }, [docs, activeId]);
 
   const active = docs.find((d) => d.id === activeId) ?? docs[0];
-  return { docs, active, select: setActiveId, create, change, open, save, close };
+  return { docs, active, select: setActiveId, create, change, rename, open, save, close };
 }
 
 export type DocumentsApi = ReturnType<typeof useDocuments>;

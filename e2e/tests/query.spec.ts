@@ -107,6 +107,7 @@ test("a foreign-key cell opens the row it references, and that can go to a new t
   await dialog.getByRole("button", { name: "Open in new tab" }).click();
   await expect(studio.page.getByRole("dialog")).toHaveCount(0);
   await expect(studio.cells.filter({ hasText: "user2@example.com" })).toBeVisible();
+  await expect(studio.page.getByTitle("users", { exact: true })).toBeVisible();
 });
 
 test("a column in several foreign keys asks which one to follow, and a composite key uses all its columns", async ({ studio }) => {

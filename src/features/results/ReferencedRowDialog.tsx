@@ -16,7 +16,7 @@ interface Props {
   row: Row;
   /** Column types of the result the row comes from. */
   types: string[];
-  onOpenSql?: (sql: string) => void;
+  onOpenSql?: (name: string, sql: string) => void;
   onClose: () => void;
 }
 
@@ -61,7 +61,7 @@ export function ReferencedRowDialog({ target, row, types, onOpenSql, onClose }: 
           )}
         </div>
         <DialogFooter>
-          {onOpenSql && <Button variant="outline" onClick={() => { onOpenSql(sql); onClose(); }}>Open in new tab</Button>}
+          {onOpenSql && <Button variant="outline" onClick={() => { onOpenSql(target.table, sql); onClose(); }}>Open in new tab</Button>}
           <Button onClick={onClose}>Close</Button>
         </DialogFooter>
       </DialogContent>

@@ -44,7 +44,7 @@ interface Props {
   onStatus: (status: TabStatus) => void;
   onSaveFile: () => void;
   /** Opens a query in a new tab and runs it. */
-  onOpenSql: (sql: string) => void;
+  onOpenSql: (name: string, sql: string) => void;
 }
 
 /** One tab: its SQL editor and, below it, its own results. Stays mounted while hidden to keep cursor, undo and results. */
