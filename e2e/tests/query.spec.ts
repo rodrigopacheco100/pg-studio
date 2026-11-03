@@ -91,3 +91,42 @@ test("Stop cancels a running query and the connection stays usable", async ({ st
   await studio.run("select 1 as still_here");
   await expect(studio.page.getByRole("columnheader", { name: "still_here" })).toBeVisible();
 });
+
+test("a foreign-key cell opens the row it references, and that can go to a new tab", async ({ studio }) => {
+  await studio.newConnection({ name: "q" });
+  await studio.connect("q");
+  await studio.run("select id, user_id from orders where id = 1");
+
+  const cell = studio.cells.filter({ hasText: /^2$/ }).last();
+  await cell.getByRole("button", { name: /referenced row/ }).click();
+
+  const dialog = studio.page.getByRole("dialog");
+  await expect(dialog).toContainText("public.users");
+  await expect(dialog.getByRole("cell", { name: "user2@example.com" })).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Open in new tab" }).click();
+  await expect(studio.page.getByRole("dialog")).toHaveCount(0);
+  await expect(studio.cells.filter({ hasText: "user2@example.com" })).toBeVisible();
+});
+
+test("a column in several foreign keys asks which one to follow, and a composite key uses all its columns", async ({ studio }) => {
+  const id = randomUUID().slice(0, 8);
+  await studio.newConnection({ name: "q" });
+  await studio.connect("q");
+  await studio.run(
+    `create table p_${id} (a int, b int, label text, primary key (a, b));
+     create table q_${id} (a int primary key, note text);
+     create table c_${id} (a int, b int, foreign key (a, b) references p_${id} (a, b), foreign key (a) references q_${id} (a));
+     insert into p_${id} values (1, 1, 'first'), (1, 2, 'second');
+     insert into q_${id} values (1, 'only-q');
+     insert into c_${id} values (1, 2);`,
+  );
+  await studio.run(`select a, b from c_${id}`);
+
+  await studio.cells.filter({ hasText: /^1$/ }).getByRole("button", { name: /referenced row/ }).click();
+  await studio.page.getByRole("menuitem", { name: new RegExp(`p_${id}`) }).click();
+
+  const dialog = studio.page.getByRole("dialog");
+  await expect(dialog.getByRole("cell", { name: "second" })).toBeVisible();
+  await expect(dialog.getByRole("cell", { name: "first" })).toHaveCount(0);
+});

@@ -8,7 +8,7 @@ import { type ResultsApi } from "./useResults";
 import { ResultViewer } from "./ResultViewer";
 
 /** Single results pane: shows the last query or the opened table. Pagination lives in the footer. */
-export function ResultsPane({ results }: { results: ResultsApi }) {
+export function ResultsPane({ results, onOpenSql }: { results: ResultsApi; onOpenSql: (sql: string) => void }) {
   const { outcome, displayed, views, source, pageSize, setView } = results;
   const exports = useExports();
   const table = source.kind === "table" ? source.table : undefined;
@@ -51,7 +51,7 @@ export function ResultsPane({ results }: { results: ResultsApi }) {
       )}
       {outcome?.kind === "ok" && (
         <>
-          {visible.map((r, i) => <ResultViewer key={i} result={r} table={table} view={views[i] ?? NO_VIEW} onViewChange={(v) => setView(i, v)} onExport={(f) => exportResult(i, f)} />)}
+          {visible.map((r, i) => <ResultViewer key={i} result={r} table={table} view={views[i] ?? NO_VIEW} onViewChange={(v) => setView(i, v)} onExport={(f) => exportResult(i, f)} onOpenSql={onOpenSql} />)}
           {visible.length === 0 && <div className={msg}>No results.</div>}
         </>
       )}

@@ -29,6 +29,8 @@ export interface DocPaneHandle {
   focus: () => void;
   /** Shows a table's first page in this tab's results (the SQL in the editor is set by the caller). */
   openTable: (table: TableRef) => void;
+  /** Runs generated SQL (no destructive check) and shows its results. */
+  runSql: (sql: string) => void;
   reset: () => void;
 }
 
@@ -41,10 +43,12 @@ interface Props {
   onChange: (sql: string) => void;
   onStatus: (status: TabStatus) => void;
   onSaveFile: () => void;
+  /** Opens a query in a new tab and runs it. */
+  onOpenSql: (sql: string) => void;
 }
 
 /** One tab: its SQL editor and, below it, its own results. Stays mounted while hidden to keep cursor, undo and results. */
-export function DocPane({ ref, doc, tables, active, onChange, onStatus, onSaveFile }: Props) {
+export function DocPane({ ref, doc, tables, active, onChange, onStatus, onSaveFile, onOpenSql }: Props) {
   const results = useResults();
   const editor = useRef<SqlEditorHandle>(null);
   const { settings, update } = useSettings();
@@ -75,6 +79,7 @@ export function DocPane({ ref, doc, tables, active, onChange, onStatus, onSaveFi
     saveQuery,
     focus: () => editor.current?.focus(),
     openTable: (table) => void results.openTable(table),
+    runSql: (sql) => void results.runQuery(sql),
     reset: results.reset,
   }));
 
@@ -102,7 +107,7 @@ export function DocPane({ ref, doc, tables, active, onChange, onStatus, onSaveFi
           <SqlEditor ref={editor} value={doc.sql} tables={tables} onChange={onChange} onRun={run} />
         </div>
       </div>
-      <ResultsPane results={results} />
+      <ResultsPane results={results} onOpenSql={onOpenSql} />
     </div>
   );
 }

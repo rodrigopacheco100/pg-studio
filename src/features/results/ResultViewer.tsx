@@ -1,9 +1,10 @@
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent,
   ContextMenuSubTrigger, ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { ArrowDown, ArrowUp, ArrowUpDown, ListFilter, X } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, ExternalLink, ListFilter, X } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { EXPORT_FORMATS } from "@/features/exports/exportResult";
 import { useDialogs } from "@/hooks/useDialogs";
@@ -15,8 +16,10 @@ import {
   cellRange, colRange, colsOf, contains, rowRange, rowsOf,
   type Cell, type Range,
 } from "./selection";
-import type { ExportFormat, QueryResult, TableRef } from "@/types";
+import type { ExportFormat, FkTarget, QueryResult, TableRef } from "@/types";
 import { JsonDialog } from "./JsonDialog";
+
+const ReferencedRowDialog = lazy(() => import("./ReferencedRowDialog").then((m) => ({ default: m.ReferencedRowDialog })));
 
 const EDGE = 28; // distance from the edge that triggers autoscroll while dragging
 const STEP = 24;
@@ -43,10 +46,13 @@ interface Props {
   /** When the result is the contents of a table, enables "Copy as INSERT". */
   table?: TableRef;
   /** Sort and filters of the result; the owner applies them to `result` (it already comes sorted and filtered). */
-  view: GridView;
-  onViewChange: (view: GridView) => void;
+  view?: GridView;
+  /** Without it the grid is plain: no sort buttons and no filter bar. */
+  onViewChange?: (view: GridView) => void;
   /** Starts exporting every row of the result (not just the page); the progress shows in its own window. */
-  onExport: (format: ExportFormat) => Promise<void>;
+  onExport?: (format: ExportFormat) => Promise<void>;
+  /** Opens a query in a new editor tab (the "Open in new tab" of a foreign key's dialog); without it the dialog lacks that button. */
+  onOpenSql?: (sql: string) => void;
 }
 
 /** Reads the position (row/column) of a grid element; undefined outside it. */
@@ -65,10 +71,41 @@ interface GridRowProps {
   fullRow: boolean;
   /** Column types of the result; boolean cells are shown in italics. */
   types: string[];
+  /** Foreign keys of each column (empty when none); those cells get a button that calls `onFollow`. */
+  refs: FkTarget[][];
+  onFollow: (target: FkTarget, row: Row) => void;
+}
+
+const followClass = "absolute top-1/2 right-1 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground";
+
+/** The button of a foreign-key cell: opens the referenced row, or a menu to pick the key when the column is part of several. */
+function FollowButton({ targets, value, onFollow }: { targets: FkTarget[]; value: string; onFollow: (t: FkTarget) => void }) {
+  const icon = <ExternalLink className="size-3" />;
+  if (targets.length === 1) {
+    return (
+      <button type="button" data-nodrag title={`Show the row ${targets[0].table} references with ${value}`} aria-label="Show the referenced row" className={followClass} onClick={() => onFollow(targets[0])}>
+        {icon}
+      </button>
+    );
+  }
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button type="button" data-nodrag title="Show a referenced row…" aria-label="Show the referenced row" className={followClass}>{icon}</button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {targets.map((t) => (
+          <DropdownMenuItem key={t.name} onSelect={() => onFollow(t)}>
+            {t.name} → {t.table} ({t.columns.map((c) => c.column).join(", ")})
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }
 
 /** Memoized: dragging the selection only re-renders the rows whose selection changed. */
-const GridRow = memo(function GridRow({ row, r, sig, fullRow, types }: GridRowProps) {
+const GridRow = memo(function GridRow({ row, r, sig, fullRow, types, refs, onFollow }: GridRowProps) {
   const segs = sig ? sig.split(",").map((s) => s.split("-").map(Number)) : [];
   const isSel = (c: number) => segs.some(([a, b]) => c >= a && c <= b);
   return (
@@ -89,13 +126,15 @@ const GridRow = memo(function GridRow({ row, r, sig, fullRow, types }: GridRowPr
           data-c={c}
           title={v ?? undefined}
           className={cn(
-            "max-w-105 truncate border-r border-b px-3 py-1 whitespace-nowrap",
+            "group/cell relative max-w-105 truncate border-r border-b px-3 py-1 whitespace-nowrap",
+            refs[c]?.length && v !== null && "pr-7",
             (v === null || types[c] === "bool") && "italic",
             v === null && "text-muted-foreground",
             isSel(c) && "bg-primary/25",
           )}
         >
           {v === null ? "NULL" : v}
+          {refs[c]?.length > 0 && v !== null && <FollowButton targets={refs[c]} value={v} onFollow={(t) => onFollow(t, row)} />}
         </td>
       ))}
     </tr>
@@ -118,7 +157,7 @@ function renderMenu(items: MenuItem[]): React.ReactNode {
 }
 
 /** Single results viewer: cell/row/column selection, drag and context menu. */
-export function ResultViewer({ result, table, view, onViewChange, onExport }: Props) {
+export function ResultViewer({ result, table, view = NO_VIEW, onViewChange, onExport, onOpenSql }: Props) {
   const dialogs = useDialogs();
   const [filtering, setFiltering] = useState(false);
   const columnsKey = result.columns.join("\u0000");
@@ -127,6 +166,10 @@ export function ResultViewer({ result, table, view, onViewChange, onExport }: Pr
   const [ranges, setRanges] = useState<Range[]>([]);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [json, setJson] = useState<string | null>(null);
+  /** The foreign key (and the row it was followed from) whose referenced rows are open in a dialog. */
+  const [followed, setFollowed] = useState<{ target: FkTarget; row: Row } | null>(null);
+  const follow = useCallback((target: FkTarget, row: Row) => setFollowed({ target, row }), []);
+
   const [notice, setNotice] = useState("");
 
   const root = useRef<HTMLDivElement>(null);
@@ -222,7 +265,7 @@ export function ResultViewer({ result, table, view, onViewChange, onExport }: Pr
 
   async function exportAll(format: ExportFormat) {
     try {
-      await onExport(format);
+      await onExport?.(format);
     } catch (e) {
       void dialogs.alert(`Could not start the export:\n${errText(e)}`);
     }
@@ -348,10 +391,12 @@ export function ResultViewer({ result, table, view, onViewChange, onExport }: Pr
           ...(table ? [{ label: "INSERT", onSelect: () => copy(toInsert(table, names, data), "INSERT") }] : []),
         ],
       },
-      {
-        label: "Export all rows",
-        items: EXPORT_FORMATS.filter((f) => f.id !== "insert" || table).map((f) => ({ label: f.label, onSelect: () => void exportAll(f.id) })),
-      },
+      ...(onExport
+        ? [{
+            label: "Export all rows",
+            items: EXPORT_FORMATS.filter((f) => f.id !== "insert" || table).map((f) => ({ label: f.label, onSelect: () => void exportAll(f.id) })),
+          }]
+        : []),
       { separator: true },
       { label: "Select all", onSelect: selectAll },
     ];
@@ -382,26 +427,28 @@ export function ResultViewer({ result, table, view, onViewChange, onExport }: Pr
 
   return (
     <div className="outline-none" tabIndex={0} ref={root} onKeyDown={onKeyDown}>
-      <div className="flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground">
-        <button
-          type="button"
-          aria-pressed={filtering}
-          className={cn("flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-accent", filtering && "bg-accent text-foreground")}
-          onClick={() => setFiltering((f) => !f)}
-        >
-          <ListFilter className="size-3" /> Filter
-        </button>
-        {isActive(view) && (
+      {onViewChange && (
+        <div className="flex items-center gap-2 px-3 py-1 text-xs text-muted-foreground">
           <button
             type="button"
-            className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-accent"
-            onClick={() => onViewChange(NO_VIEW)}
+            aria-pressed={filtering}
+            className={cn("flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-accent", filtering && "bg-accent text-foreground")}
+            onClick={() => setFiltering((f) => !f)}
           >
-            <X className="size-3" /> Clear sort and filters
+            <ListFilter className="size-3" /> Filter
           </button>
-        )}
-      </div>
-      {filtering && <FilterBar result={result} applied={view.filters} onSearch={(filters) => onViewChange({ ...view, filters })} />}
+          {isActive(view) && (
+            <button
+              type="button"
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-accent"
+              onClick={() => onViewChange(NO_VIEW)}
+            >
+              <X className="size-3" /> Clear sort and filters
+            </button>
+          )}
+        </div>
+      )}
+      {onViewChange && filtering && <FilterBar result={result} applied={view.filters} onSearch={(filters) => onViewChange({ ...view, filters })} />}
       <ContextMenu onOpenChange={(open) => !open && setMenu(null)}>
         <ContextMenuTrigger asChild>
           <table
@@ -429,16 +476,18 @@ export function ResultViewer({ result, table, view, onViewChange, onExport }: Pr
                     >
                       <div className="flex items-center gap-1.5">
                         {c}
-                        <button
-                          type="button"
-                          data-nodrag
-                          title={sorted ? (sorted.desc ? "Sorted descending (click to remove)" : "Sorted ascending (click for descending)") : "Sort"}
-                          aria-label={`Sort by ${c}`}
-                          className={cn("rounded p-0.5 hover:bg-accent", sorted ? "text-primary" : "text-muted-foreground opacity-60")}
-                          onClick={() => onViewChange({ ...view, sort: nextSort(view.sort, i) })}
-                        >
-                          <SortIcon className="size-3" />
-                        </button>
+                        {onViewChange && (
+                          <button
+                            type="button"
+                            data-nodrag
+                            title={sorted ? (sorted.desc ? "Sorted descending (click to remove)" : "Sorted ascending (click for descending)") : "Sort"}
+                            aria-label={`Sort by ${c}`}
+                            className={cn("rounded p-0.5 hover:bg-accent", sorted ? "text-primary" : "text-muted-foreground opacity-60")}
+                            onClick={() => onViewChange({ ...view, sort: nextSort(view.sort, i) })}
+                          >
+                            <SortIcon className="size-3" />
+                          </button>
+                        )}
                       </div>
                     </th>
                   );
@@ -447,7 +496,7 @@ export function ResultViewer({ result, table, view, onViewChange, onExport }: Pr
             </thead>
             <tbody>
               {result.rows.slice(0, shown).map((row, r) => (
-                <GridRow key={r} row={row} r={r} sig={rowSel[r].sig} fullRow={rowSel[r].full} types={result.types} />
+                <GridRow key={r} row={row} r={r} sig={rowSel[r].sig} fullRow={rowSel[r].full} types={result.types} refs={result.refs} onFollow={follow} />
               ))}
             </tbody>
           </table>
@@ -464,6 +513,11 @@ export function ResultViewer({ result, table, view, onViewChange, onExport }: Pr
         </div>
       )}
 
+      {followed && (
+        <Suspense fallback={null}>
+          <ReferencedRowDialog {...followed} types={result.types} onOpenSql={onOpenSql} onClose={() => setFollowed(null)} />
+        </Suspense>
+      )}
       {json !== null && (
         <JsonDialog title="JSON" json={json} onCopy={() => copy(json, "JSON")} onClose={() => setJson(null)} />
       )}

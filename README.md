@@ -43,6 +43,7 @@ Write SQL, browse tables, filter results, export millions of rows, and reach pri
 - Sort by any column and filter with column, operator and value (`name starts with al`, `id ≥ 10`), with operators that follow the column type
 - Typed values (booleans, numbers, dates, JSON), cell selection, and copy as JSON, CSV, TSV or INSERT
 - Large tables are paginated by the server, with sorting and filtering done in SQL
+- Foreign-key cells have a button that opens the row they reference in a dialog (composite keys use all their columns; you pick when a column is in several keys), which can be moved to a new tab
 
 ### Exports
 - Export **all** rows, not just the visible page, as CSV, JSON or SQL INSERT

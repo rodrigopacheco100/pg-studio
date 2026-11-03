@@ -67,11 +67,21 @@ export interface TableRef {
   name: string;
 }
 
+/** A foreign key whose columns are all in a result: `columns` say where each is and which referenced column it points to. */
+export interface FkTarget {
+  name: string;
+  schema: string;
+  table: string;
+  columns: { index: number; column: string }[];
+}
+
 export interface QueryResult {
   columns: string[];
   rows: (string | null)[][];
   /** PostgreSQL type name per column (`bool`, `int4`…); empty when unknown. */
   types: string[];
+  /** Per column, the foreign keys it is part of (those with every column in the result); empty when none is. */
+  refs: FkTarget[][];
   affected: number | null;
 }
 

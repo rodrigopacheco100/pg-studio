@@ -34,8 +34,14 @@ const quote = (name: string) => `"${name.replace(/"/g, '""')}"`;
 export function QueryView({ ref, documents, tables, visible, onStatus }: Props) {
   const { docs, active, select, create, change, open, save, close } = documents;
   const panes = useRef(new Map<number, DocPaneHandle>());
-  /** A table to show in a tab that has just been created, once its pane exists. */
-  const [pending, setPending] = useState<{ id: number; table: TableRef } | null>(null);
+  /** What to show in a tab that has just been created, once its pane exists. */
+  const [pending, setPending] = useState<{ id: number; show: (pane: DocPaneHandle) => void } | null>(null);
+  /** Puts `sql` in the empty untitled tab on screen, or in a new one, and shows its results there. */
+  function openIn(sql: string, show: (pane: DocPaneHandle) => void) {
+    const blank = active.path === null && active.sql === "";
+    if (blank) change(active.id, sql);
+    setPending({ id: blank ? active.id : create(sql), show });
+  }
   const pane = () => panes.current.get(active.id);
 
   useImperativeHandle(ref, () => ({
@@ -43,12 +49,7 @@ export function QueryView({ ref, documents, tables, visible, onStatus }: Props) 
     runAtCursor: () => pane()?.runAtCursor(),
     format: () => pane()?.format(),
     saveQuery: () => pane()?.saveQuery() ?? Promise.resolve(),
-    openTable(table) {
-      const sql = `SELECT * FROM ${quote(table.schema)}.${quote(table.name)};`;
-      const blank = active.path === null && active.sql === "";
-      if (blank) change(active.id, sql);
-      setPending({ id: blank ? active.id : create(sql), table });
-    },
+    openTable: (table) => openIn(`SELECT * FROM ${quote(table.schema)}.${quote(table.name)};`, (p) => p.openTable(table)),
     reset: () => panes.current.forEach((p) => p.reset()),
   }));
 
@@ -56,7 +57,7 @@ export function QueryView({ ref, documents, tables, visible, onStatus }: Props) 
     if (!pending) return;
     const target = panes.current.get(pending.id);
     if (!target) return;
-    target.openTable(pending.table);
+    pending.show(target);
     setPending(null);
   }, [pending]);
 
@@ -130,6 +131,7 @@ export function QueryView({ ref, documents, tables, visible, onStatus }: Props) 
           onChange={(sql) => change(d.id, sql)}
           onStatus={onStatus}
           onSaveFile={() => void save(d.id)}
+          onOpenSql={(sql) => openIn(sql, (p) => p.runSql(sql))}
         />
       ))}
     </>
