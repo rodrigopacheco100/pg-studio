@@ -2,7 +2,7 @@ import { createContext, useContext, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { PasswordInput } from "../components/PasswordInput";
+import { PasswordInput } from "@/components/PasswordInput";
 
 interface DialogsApi {
   /** Resolves `true` when confirmed, `false` when cancelled or dismissed. */

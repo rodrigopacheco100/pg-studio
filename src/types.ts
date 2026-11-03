@@ -1,4 +1,4 @@
-import type { GridQuery } from "./lib/gridView";
+import type { GridQuery } from "@/features/results/gridView";
 
 export interface Conn {
   id: number | null;

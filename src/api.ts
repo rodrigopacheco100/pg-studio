@@ -1,6 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import { open, save } from "@tauri-apps/plugin-dialog";
-import type { GridQuery } from "./lib/gridView";
+import type { GridQuery } from "@/features/results/gridView";
 import type { Conn, DetailItem, Folder, KnownHost, DetailKind, ItemDetailsMap, ExportEntry, ExportRequest, HistoryEntry, QueryOutput, QueryResult, SavedQuery, Session, Settings, StoredTheme, TableInfo, VaultStatus } from "./types";
 
 /** One typed wrapper per Tauri command defined in src-tauri/src/lib.rs. */

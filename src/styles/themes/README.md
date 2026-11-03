@@ -1,6 +1,6 @@
 # Themes
 
-Each `*.json` file here is a built-in theme; they are bundled into the app by `src/lib/themes.ts`, which
+Each `*.json` file here is a built-in theme; they are bundled into the app by `src/features/settings/themes.ts`, which
 lists them in order (and reserves their names). `dark.json` and `light.json` are the originals and also
 the base that imported themes are completed from. `dracula.json` and `omni.json` use the official
 palettes of [dracula/dracula-theme](https://github.com/dracula/dracula-theme) and

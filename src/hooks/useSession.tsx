@@ -1,6 +1,6 @@
 import { createContext, useContext, useRef } from "react";
-import { api } from "../api";
-import type { Session } from "../types";
+import { api } from "@/api";
+import type { Session } from "@/types";
 import { usePersistedState } from "./usePersistedState";
 
 interface SessionApi {

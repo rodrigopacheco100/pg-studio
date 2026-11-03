@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { createSaver } from "../lib/persist";
+import { createSaver } from "@/lib/persist";
 
 /**
  * State loaded once from the backend and written back (debounced) on every change.
