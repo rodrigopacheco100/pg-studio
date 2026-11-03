@@ -8,6 +8,7 @@
 Write SQL, browse tables, filter results, export millions of rows, and reach private databases through SSH, all in a small native app.
 
 [![Release](https://img.shields.io/github/v/release/rodrigopacheco100/pg-studio?label=release)](https://github.com/rodrigopacheco100/pg-studio/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 ![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-blue)
 ![Tauri 2](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)
 ![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)
@@ -105,3 +106,7 @@ Stored in the app data directory of your operating system:
 - `e2e/`: Playwright flows against the real app in Docker
 
 See [AGENTS.md](AGENTS.md) for architecture details and conventions.
+
+## License
+
+[MIT](LICENSE)

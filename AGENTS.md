@@ -159,7 +159,7 @@ Tests only act through the interface (`support/studio.ts` names the recurring ge
 - Commands, requirements or supported platforms change (`package.json` scripts, `release.yml` matrix, Tauri prerequisites) → update **Install** / **Build from source**.
 - A top-level folder is added → update **Project layout**.
 
-Write it for users, not contributors: short, benefit-first bullets with the real shortcuts and names; internals belong here in `AGENTS.md`. Do not claim anything the app does not do (no license badge until a `LICENSE` exists). Release notes stay in `CHANGELOG.md`, which the release workflow generates; do not edit it by hand.
+Write it for users, not contributors: short, benefit-first bullets with the real shortcuts and names; internals belong here in `AGENTS.md`. Do not claim anything the app does not do. The project is MIT-licensed (`LICENSE`); keep the badge and the License section in step if that changes. Release notes stay in `CHANGELOG.md`, which the release workflow generates; do not edit it by hand.
 
 ## Conventions
 
