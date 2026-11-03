@@ -1,10 +1,11 @@
 import { ChevronRight, Columns3, Eye, KeyRound, Link2, ListOrdered, ShieldCheck, Table2 } from "lucide-react";
-import { type ReactNode, useState } from "react";
+import { lazy, type ReactNode, Suspense, useState } from "react";
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
 import { api, errText } from "@/api";
-import { ItemDetailsDialog } from "./ItemDetailsDialog";
 import type { DetailItem, DetailKind, TableInfo, TableRef } from "@/types";
+
+const ItemDetailsDialog = lazy(() => import("./ItemDetailsDialog").then((m) => ({ default: m.ItemDetailsDialog })));
 
 const FOLDERS: { kind: DetailKind; label: string; icon: ReactNode; tableOnly: boolean }[] = [
   { kind: "columns", label: "Columns", icon: <Columns3 />, tableOnly: false },
@@ -74,7 +75,9 @@ function Folder({ table, kind, label, icon: folderIcon }: { table: TableInfo; ki
         </div>
       )}
       {selected !== null && (
-        <ItemDetailsDialog table={table} kind={kind} name={selected} onClose={() => setSelected(null)} />
+        <Suspense fallback={null}>
+          <ItemDetailsDialog table={table} kind={kind} name={selected} onClose={() => setSelected(null)} />
+        </Suspense>
       )}
     </div>
   );

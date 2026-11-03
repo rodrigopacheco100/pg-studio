@@ -75,11 +75,12 @@ function getRunText(v: EditorView) {
   return (from === to ? s.doc.toString() : s.sliceDoc(from, to)).trim();
 }
 
-function formatDocument(v: EditorView, options: FormatOptions, onError: (message: string) => void) {
+async function formatDocument(v: EditorView, options: FormatOptions, onError: (message: string) => void) {
   const text = v.state.doc.toString();
   try {
-    const formatted = formatSql(text, options);
-    if (formatted === text) return;
+    const formatted = await formatSql(text, options);
+    // Typing while the formatter loaded would be overwritten; the user can press the shortcut again.
+    if (formatted === text || v.state.doc.toString() !== text) return;
     v.dispatch({
       changes: { from: 0, to: text.length, insert: formatted },
       selection: { anchor: Math.min(v.state.selection.main.head, formatted.length) },
@@ -144,7 +145,7 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
       const { doc, selection } = view.current!.state;
       return statementAtCursor(doc.toString(), selection.main.head);
     },
-    format: () => formatDocument(view.current!, formatOptions.current, (m) => void dialogs.alert(m)),
+    format: () => void formatDocument(view.current!, formatOptions.current, (m) => void dialogs.alert(m)),
   }));
 
   useEffect(() => {
@@ -208,7 +209,7 @@ export function SqlEditor({ ref, value, tables, onChange, onRun }: Props) {
       <EditorMenu
         view={view}
         onRun={(sql) => latest.current.onRun(sql)}
-        onFormat={() => view.current && formatDocument(view.current, formatOptions.current, (m) => void dialogs.alert(m))}
+        onFormat={() => view.current && void formatDocument(view.current, formatOptions.current, (m) => void dialogs.alert(m))}
       />
     </ContextMenu>
   );

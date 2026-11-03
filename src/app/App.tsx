@@ -1,10 +1,8 @@
 import { listen } from "@tauri-apps/api/event";
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AppMenu } from "./AppMenu";
-import { SettingsDialog } from "@/features/settings/SettingsDialog";
-import { ConnectionDialog } from "@/features/connections/ConnectionDialog";
 import { needsReconnect } from "@/features/connections/connectionChange";
 import { Sidebar } from "@/features/connections/Sidebar";
 import { StatusBar } from "./StatusBar";
@@ -28,6 +26,10 @@ import { ExportsView } from "@/features/exports/ExportsView";
 import { HistoryView } from "@/features/history/HistoryView";
 import { QueryView, type QueryViewHandle } from "@/features/editor/QueryView";
 import { SavedView } from "@/features/history/SavedView";
+
+// Dialogs open on demand, so their code is fetched on first use instead of at startup.
+const SettingsDialog = lazy(() => import("@/features/settings/SettingsDialog").then((m) => ({ default: m.SettingsDialog })));
+const ConnectionDialog = lazy(() => import("@/features/connections/ConnectionDialog").then((m) => ({ default: m.ConnectionDialog })));
 
 type View = "query" | "history" | "saved" | "exports";
 
@@ -255,7 +257,17 @@ export function App() {
         </main>
         <StatusBar connection={active} info={results.info} paging={results.paging} onPage={results.goToPage} restored={restored} />
 
-        {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+        <Suspense fallback={null}>
+          {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
+          {dialog !== undefined && (
+            <ConnectionDialog
+              initial={dialog.initial}
+              copyOf={dialog.copyOf}
+              onClose={() => setDialog(undefined)}
+              onSaved={(c) => void saved(c)}
+            />
+          )}
+        </Suspense>
         {notes && (
           <WhatsNewDialog
             title={notes.since ? "PG Studio was updated" : "Release history"}
@@ -265,14 +277,6 @@ export function App() {
           />
         )}
         {updater.available && !notes && <UpdateDialog update={updater.available} onClose={updater.dismiss} />}
-        {dialog !== undefined && (
-          <ConnectionDialog
-            initial={dialog.initial}
-            copyOf={dialog.copyOf}
-            onClose={() => setDialog(undefined)}
-            onSaved={(c) => void saved(c)}
-          />
-        )}
       </div>
     </TooltipProvider>
   );
