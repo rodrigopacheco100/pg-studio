@@ -2,6 +2,12 @@
 
 Newest first. Each release adds its section here (see `.github/workflows/release.yml`); the app bundles this file to show what changed after an update.
 
+## v1.3.0 - 2026-11-03
+
+- feat: name tabs opened for a table after it instead of Untitled (7ae66ac)
+- feat: follow foreign keys from result cells in a dialog (4b759ec)
+- feat: give each editor tab its own results and open tables in a new tab (65a3ed6)
+
 ## v1.2.1 - 2026-11-03
 
 - docs: add the MIT license (df12c5e)
