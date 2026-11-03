@@ -88,7 +88,9 @@ export function App() {
 
   async function checkForUpdates() {
     try {
-      if ((await updater.lookUp()) === "current") await dialogs.alert(`You're up to date (v${APP_VERSION}).`, "Check for updates");
+      const found = await updater.lookUp();
+      if (found === "current") await dialogs.alert(`You're up to date (v${APP_VERSION}).`, "Check for updates");
+      if (found === "building") await dialogs.alert("A new version was released, but its build for this system is not finished yet. Try again in a few minutes.", "Check for updates");
     } catch (e) {
       await dialogs.alert(`Could not check for updates:\n${errText(e)}`, "Check for updates");
     }
