@@ -2,6 +2,11 @@
 
 Newest first. Each release adds its section here (see `.github/workflows/release.yml`); the app bundles this file to show what changed after an update.
 
+## v1.3.1 - 2026-11-03
+
+- fix: reuse one dialog when following foreign keys, with back and forward (83cd986)
+- fix: explain that a release is still building when checking for updates (048ca4d)
+
 ## v1.3.0 - 2026-11-03
 
 - feat: name tabs opened for a table after it instead of Untitled (7ae66ac)
