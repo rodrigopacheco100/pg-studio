@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { api, errText } from "@/api";
@@ -10,25 +11,52 @@ import { NO_VIEW } from "./gridView";
 import type { Row } from "./rowFormat";
 import { ResultViewer } from "./ResultViewer";
 
-interface Props {
-  /** The foreign key followed and the row of the result it was followed from. */
+/** One foreign key followed: the key, the row it was followed from and that result's column types. */
+export interface FkStep {
   target: FkTarget;
   row: Row;
-  /** Column types of the result the row comes from. */
   types: string[];
+}
+
+interface Props {
+  first: FkStep;
   onOpenSql?: (name: string, sql: string) => void;
   onClose: () => void;
 }
 
 type State = { result: QueryResult } | { error: string } | null;
 
-/** The rows a foreign key points to: the referenced table where each referenced column equals the row's value. */
-export function ReferencedRowDialog({ target, row, types, onOpenSql, onClose }: Props) {
+/**
+ * The rows a foreign key points to: the referenced table where each referenced column equals the row's value.
+ * Following a key inside it replaces the content (one dialog, however deep) and Back returns along the trail.
+ */
+export function ReferencedRowDialog({ first, onOpenSql, onClose }: Props) {
   const pageSize = useSettings().settings.pageSize;
+  /** Every key followed so far and which one is on screen; going back keeps the steps ahead for Forward. */
+  const [trail, setTrail] = useState({ steps: [first], at: 0 });
+  const { target, row, types } = trail.steps[trail.at];
   const [state, setState] = useState<State>(null);
+  const follow = useCallback((step: FkStep) => setTrail((t) => ({ steps: [...t.steps.slice(0, t.at + 1), step], at: t.at + 1 })), []);
+  const go = useCallback((by: -1 | 1) => setTrail((t) => (t.steps[t.at + by] ? { ...t, at: t.at + by } : t)), []);
+
+  // The mouse's back / forward buttons (3 and 4) walk the trail, as in a browser.
+  useEffect(() => {
+    const walk = (e: MouseEvent) => {
+      if (e.button !== 3 && e.button !== 4) return;
+      e.preventDefault();
+      if (e.type === "mouseup") go(e.button === 3 ? -1 : 1);
+    };
+    window.addEventListener("mousedown", walk);
+    window.addEventListener("mouseup", walk);
+    return () => {
+      window.removeEventListener("mousedown", walk);
+      window.removeEventListener("mouseup", walk);
+    };
+  }, [go]);
 
   useEffect(() => {
     let current = true;
+    setState(null);
     const filters = target.columns.map(({ index, column }) => {
       const value = row[index];
       return value === null
@@ -57,10 +85,14 @@ export function ReferencedRowDialog({ target, row, types, onOpenSql, onClose }: 
           {!state && <div className="p-3 text-sm text-muted-foreground">Loading…</div>}
           {state && "error" in state && <div className="selectable p-3 text-sm whitespace-pre-wrap text-destructive">{state.error}</div>}
           {state && "result" in state && (
-            <ResultViewer result={state.result} table={{ schema: target.schema, name: target.table }} view={NO_VIEW} onOpenSql={onOpenSql} />
+            <ResultViewer result={state.result} table={{ schema: target.schema, name: target.table }} view={NO_VIEW} onOpenSql={onOpenSql} onFollow={follow} />
           )}
         </div>
         <DialogFooter>
+          <div className="flex gap-1 sm:mr-auto">
+            <Button variant="outline" disabled={trail.at === 0} onClick={() => go(-1)} title="Back (mouse back button)"><ArrowLeft /> Back</Button>
+            <Button variant="outline" disabled={trail.at === trail.steps.length - 1} onClick={() => go(1)} title="Forward (mouse forward button)">Forward <ArrowRight /></Button>
+          </div>
           {onOpenSql && <Button variant="outline" onClick={() => { onOpenSql(target.table, sql); onClose(); }}>Open in new tab</Button>}
           <Button onClick={onClose}>Close</Button>
         </DialogFooter>

@@ -131,3 +131,73 @@ test("a column in several foreign keys asks which one to follow, and a composite
   await expect(dialog.getByRole("cell", { name: "second" })).toBeVisible();
   await expect(dialog.getByRole("cell", { name: "first" })).toHaveCount(0);
 });
+
+test("following a foreign key inside the dialog reuses it, and Back returns", async ({ studio }) => {
+  const id = randomUUID().slice(0, 8);
+  await studio.newConnection({ name: "q" });
+  await studio.connect("q");
+  await studio.run(
+    `create table r_${id} (id int primary key, root_name text);
+     create table m_${id} (id int primary key, r int references r_${id} (id), mid_name text);
+     create table l_${id} (m int references m_${id} (id));
+     insert into r_${id} values (7, 'the-root');
+     insert into m_${id} values (5, 7, 'the-mid');
+     insert into l_${id} values (5);`,
+  );
+  await studio.run(`select m from l_${id}`);
+
+  await studio.cells.filter({ hasText: /^5$/ }).getByRole("button", { name: /referenced row/ }).click();
+  const dialog = studio.page.getByRole("dialog");
+  await expect(dialog.getByRole("cell", { name: "the-mid" })).toBeVisible();
+
+  await dialog.getByRole("cell").filter({ hasText: /^7$/ }).getByRole("button", { name: /referenced row/ }).click();
+  await expect(studio.page.getByRole("dialog")).toHaveCount(1);
+  await expect(dialog.getByRole("cell", { name: "the-root" })).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Back" }).click();
+  await expect(dialog.getByRole("cell", { name: "the-mid" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Back" })).toBeDisabled();
+
+  // The mouse's forward / back buttons (3 and 4) do the same.
+  const press = (button: number) => studio.page.evaluate((b) => window.dispatchEvent(new MouseEvent("mouseup", { button: b })), button);
+  await press(4);
+  await expect(dialog.getByRole("cell", { name: "the-root" })).toBeVisible();
+  await press(3);
+  await expect(dialog.getByRole("cell", { name: "the-mid" })).toBeVisible();
+
+  // Forward button: enabled after going back, disabled at the last step.
+  await expect(dialog.getByRole("button", { name: "Forward" })).toBeEnabled();
+  await dialog.getByRole("button", { name: "Forward" }).click();
+  await expect(dialog.getByRole("cell", { name: "the-root" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Forward" })).toBeDisabled();
+  await expect(dialog.getByRole("button", { name: "Back" })).toBeEnabled();
+});
+
+test("following a key after going back drops the steps that were ahead", async ({ studio }) => {
+  const id = randomUUID().slice(0, 8);
+  await studio.newConnection({ name: "q" });
+  await studio.connect("q");
+  await studio.run(
+    `create table a_${id} (id int primary key, a_name text);
+     create table b_${id} (id int primary key, a int references a_${id} (id), b_name text);
+     create table c_${id} (id int primary key, a int references a_${id} (id), c_name text);
+     create table t_${id} (b int references b_${id} (id), c int references c_${id} (id));
+     insert into a_${id} values (1, 'the-a');
+     insert into b_${id} values (2, 1, 'the-b');
+     insert into c_${id} values (3, 1, 'the-c');
+     insert into t_${id} values (2, 3);`,
+  );
+  await studio.run(`select b, c from t_${id}`);
+
+  await studio.cells.filter({ hasText: /^2$/ }).getByRole("button", { name: /referenced row/ }).click();
+  const dialog = studio.page.getByRole("dialog");
+  await dialog.getByRole("cell").filter({ hasText: /^1$/ }).getByRole("button", { name: /referenced row/ }).click();
+  await expect(dialog.getByRole("cell", { name: "the-a" })).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Back" }).click();
+  await expect(dialog.getByRole("button", { name: "Forward" })).toBeEnabled();
+  // Following the same key again from here replaces the step ahead: Forward has nothing left.
+  await dialog.getByRole("cell").filter({ hasText: /^1$/ }).getByRole("button", { name: /referenced row/ }).click();
+  await expect(dialog.getByRole("cell", { name: "the-a" })).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Forward" })).toBeDisabled();
+});

@@ -18,6 +18,7 @@ import {
 } from "./selection";
 import type { ExportFormat, FkTarget, QueryResult, TableRef } from "@/types";
 import { JsonDialog } from "./JsonDialog";
+import type { FkStep } from "./ReferencedRowDialog";
 
 const ReferencedRowDialog = lazy(() => import("./ReferencedRowDialog").then((m) => ({ default: m.ReferencedRowDialog })));
 
@@ -53,6 +54,8 @@ interface Props {
   onExport?: (format: ExportFormat) => Promise<void>;
   /** Opens a query in a new editor tab (the "Open in new tab" of a foreign key's dialog); without it the dialog lacks that button. */
   onOpenSql?: (name: string, sql: string) => void;
+  /** Takes over following a foreign key (a dialog that swaps its own content); without it the grid opens a dialog. */
+  onFollow?: (step: FkStep) => void;
 }
 
 /** Reads the position (row/column) of a grid element; undefined outside it. */
@@ -157,7 +160,7 @@ function renderMenu(items: MenuItem[]): React.ReactNode {
 }
 
 /** Single results viewer: cell/row/column selection, drag and context menu. */
-export function ResultViewer({ result, table, view = NO_VIEW, onViewChange, onExport, onOpenSql }: Props) {
+export function ResultViewer({ result, table, view = NO_VIEW, onViewChange, onExport, onOpenSql, onFollow }: Props) {
   const dialogs = useDialogs();
   const [filtering, setFiltering] = useState(false);
   const columnsKey = result.columns.join("\u0000");
@@ -168,7 +171,10 @@ export function ResultViewer({ result, table, view = NO_VIEW, onViewChange, onEx
   const [json, setJson] = useState<string | null>(null);
   /** The foreign key (and the row it was followed from) whose referenced rows are open in a dialog. */
   const [followed, setFollowed] = useState<{ target: FkTarget; row: Row } | null>(null);
-  const follow = useCallback((target: FkTarget, row: Row) => setFollowed({ target, row }), []);
+  const follow = useCallback(
+    (target: FkTarget, row: Row) => (onFollow ? onFollow({ target, row, types: result.types }) : setFollowed({ target, row })),
+    [onFollow, result.types],
+  );
 
   const [notice, setNotice] = useState("");
 
@@ -515,7 +521,7 @@ export function ResultViewer({ result, table, view = NO_VIEW, onViewChange, onEx
 
       {followed && (
         <Suspense fallback={null}>
-          <ReferencedRowDialog {...followed} types={result.types} onOpenSql={onOpenSql} onClose={() => setFollowed(null)} />
+          <ReferencedRowDialog first={{ ...followed, types: result.types }} onOpenSql={onOpenSql} onClose={() => setFollowed(null)} />
         </Suspense>
       )}
       {json !== null && (
