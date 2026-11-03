@@ -2,6 +2,14 @@
 
 Newest first. Each release adds its section here (see `.github/workflows/release.yml`); the app bundles this file to show what changed after an update.
 
+## v1.2.1 - 2026-11-03
+
+- docs: add the MIT license (df12c5e)
+- perf: load the SQL formatter and dialogs on demand (e30e5b8)
+- refactor: organize the frontend by feature (55e8a9e)
+- docs: richer README and AGENTS.md rules to keep it in sync (6a700ed)
+- fix: show the release notes in the update dialog (d506851)
+
 ## v1.2.0 - 2026-11-02
 
 - feat: duplicate a connection; reconnect when the open one is edited (4e10743)
