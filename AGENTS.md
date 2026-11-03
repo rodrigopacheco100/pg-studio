@@ -149,6 +149,17 @@ Playwright cannot drive the native Tauri window on Linux, so the production fron
 
 Tests only act through the interface (`support/studio.ts` names the recurring gestures; `support/test.ts` provides the `studio` fixture). Tests that change data create tables with unique names. To add a flow: a `tests/<area>.spec.ts` with the fixture; test data belongs in `fixtures/seed.sql`. The Playwright version in `e2e/package.json` must match the image tag in `docker/tests.Dockerfile`.
 
+## README
+
+`README.md` is the public face of the project (pitch, feature list, install, build, local data). Keep it in sync in the same change that alters what it describes:
+
+- A user-visible feature is added, changed or removed → update the matching bullet under **Features** (keep the grouped sections: SQL editor, Results grid, Exports, Browsing, Connections, Personalization); new capabilities of note may also go in **Why PG Studio**.
+- A file is added to or removed from the app data directory → update the **Local data** table.
+- Commands, requirements or supported platforms change (`package.json` scripts, `release.yml` matrix, Tauri prerequisites) → update **Install** / **Build from source**.
+- A top-level folder is added → update **Project layout**.
+
+Write it for users, not contributors: short, benefit-first bullets with the real shortcuts and names; internals belong here in `AGENTS.md`. Do not claim anything the app does not do (no license badge until a `LICENSE` exists). Release notes stay in `CHANGELOG.md`, which the release workflow generates; do not edit it by hand.
+
 ## Conventions
 
 - Never call `window.confirm/alert/prompt`: the webview places them at arbitrary spots. Use `useDialogs()` (`confirm`, `alert`, `prompt`; all async, in `src/hooks/useDialogs.tsx`).
