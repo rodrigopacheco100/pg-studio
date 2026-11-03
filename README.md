@@ -36,7 +36,7 @@ Write SQL, browse tables, filter results, export millions of rows, and reach pri
 - **Stop** button to cancel a running query
 - Confirmation before `DROP`, `TRUNCATE`, `ALTER ... DROP` and `DELETE` / `UPDATE` without `WHERE`, including inside CTEs
 - Beautify (`Ctrl+Shift+F`), undoable
-- Multiple tabs backed by `.sql` files: new, open, save, save as (`Ctrl+T`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+W`), with an unsaved marker
+- Multiple tabs backed by `.sql` files: new, open, save, save as (`Ctrl+T`, `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`, `Ctrl+W`), with an unsaved marker. Each tab has its own results, and clicking a table in the sidebar opens it in a new tab with its `SELECT` in the editor
 - Query history and named saved queries
 
 ### Results grid

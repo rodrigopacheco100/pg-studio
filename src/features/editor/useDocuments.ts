@@ -42,6 +42,7 @@ export function useDocuments() {
     const doc = blank(sql);
     setDocs((all) => [...all, doc]);
     setActiveId(doc.id);
+    return doc.id;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `blank` only touches refs
   }, []);
 

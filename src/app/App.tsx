@@ -20,11 +20,11 @@ import { useSession } from "@/hooks/useSession";
 import { useSettings } from "@/features/settings/useSettings";
 import { useDialogs } from "@/hooks/useDialogs";
 import { useDocuments } from "@/features/editor/useDocuments";
-import { useResults } from "@/features/results/useResults";
 import type { Conn, Folder } from "@/types";
 import { ExportsView } from "@/features/exports/ExportsView";
 import { HistoryView } from "@/features/history/HistoryView";
 import { QueryView, type QueryViewHandle } from "@/features/editor/QueryView";
+import type { TabStatus } from "@/features/editor/DocPane";
 import { SavedView } from "@/features/history/SavedView";
 
 // Dialogs open on demand, so their code is fetched on first use instead of at startup.
@@ -39,7 +39,7 @@ export function App() {
   const ensureVault = useVault();
   const { settings, update } = useSettings();
   const ws = useConnections(settings.restoreConnection ? session.initial.connectionId : null);
-  const results = useResults();
+  const [status, setStatus] = useState<TabStatus>({ info: null, paging: null, onPage: () => {} });
   const [view, setView] = useState<View>("query");
   const documents = useDocuments();
   /** `undefined` = closed; `initial`: `null` = new connection, `Conn` = editing (or a copy, with `copyOf` its source). */
@@ -98,7 +98,7 @@ export function App() {
   const environment = environmentOf(active);
 
   function resetWorkspace() {
-    results.reset();
+    queryView.current?.reset();
     setView("query");
   }
 
@@ -231,7 +231,7 @@ export function App() {
           onDuplicate={(c) => setDialog({ initial: { ...c, id: null, name: `${c.name} (copy)` }, copyOf: c.id! })}
           onDelete={remove}
           onToggle={toggle}
-          onOpenTable={(t) => { setView("query"); void results.openTable(t); }}
+          onOpenTable={(t) => { setView("query"); queryView.current?.openTable(t); }}
           onRefreshTables={() => ws.refreshTables().catch((e) => dialogs.alert(errText(e)))}
         />
         <main className="flex min-h-0 min-w-0 flex-col">
@@ -248,14 +248,14 @@ export function App() {
           <div className="flex min-h-0 flex-1 flex-col">
             {/* Kept mounted to preserve the editor (cursor, undo) when switching tabs. */}
             <div className="flex min-h-0 flex-1 flex-col" hidden={view !== "query"}>
-              <QueryView ref={queryView} documents={documents} tables={ws.tables} results={results} visible={view === "query"} />
+              <QueryView ref={queryView} documents={documents} tables={ws.tables} visible={view === "query"} onStatus={setStatus} />
             </div>
             {view === "history" && <HistoryView onUse={useSql} />}
             {view === "saved" && <SavedView onUse={useSql} />}
             {view === "exports" && <ExportsView />}
           </div>
         </main>
-        <StatusBar connection={active} info={results.info} paging={results.paging} onPage={results.goToPage} restored={restored} />
+        <StatusBar connection={active} info={status.info} paging={status.paging} onPage={status.onPage} restored={restored} />
 
         <Suspense fallback={null}>
           {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
